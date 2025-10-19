@@ -89,6 +89,14 @@ impl LVec {
         Vec3::new(self.x, self.y, self.z)
     }
 
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.t * other.t - (self.x * other.x + self.y * other.y + self.z * other.z)
+    }
+
+    pub fn squared(&self) -> f64 {
+        self.dot(self)
+    }
+
     pub fn t(&self) -> f64 {
         self.t
     }
