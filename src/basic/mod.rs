@@ -54,7 +54,7 @@ impl Triangle {
         let logger = Logger::new(logger);
         Ok(Self {
             integrand: Integrand::from_args(integrand,p, q, m_psi)?,
-            integrator: Integrator::from_args(integrator, 10, 100_000, 42, 10)?,
+            integrator: Integrator::from_args(integrator, 50, 500_000, 42, 10)?,
             parametrization: Parametrization::from_args(parametrization, 1.0)?,
             logger,
         })
