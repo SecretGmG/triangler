@@ -1,9 +1,9 @@
-mod basic;
+pub mod basic;
 mod parametrization;
 mod vectors;
 use crate::vectors::{LVec, Vec3};
 use pyo3::prelude::*;
-use basic::Triangle;
+pub use basic::Triangle;
 #[pyclass]
 pub(crate) struct IntegrationResult {
     mean: f64,
