@@ -1,6 +1,6 @@
 pub mod basic;
 mod parametrization;
-mod vectors;
+pub mod vectors;
 use crate::vectors::{LVec, Vec3};
 use pyo3::prelude::*;
 pub use basic::Triangle;
