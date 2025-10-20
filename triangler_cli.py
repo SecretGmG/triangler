@@ -44,10 +44,8 @@ if __name__ == '__main__':
     m_psi = args.m_psi
 
     logger = logging.getLogger('Triangler')
-    logger.info('test')
 
-    #there is a sign flip bug somewhere
-    triangle = triangler.Triangle(p_vec, -q_vec, m_psi, "vegas_multi", "improved", args.parameterization, logger)
+    triangle = triangler.Triangle(p_vec, q_vec, m_psi, logger = logger)
 
     match args.command:
 

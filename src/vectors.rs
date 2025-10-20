@@ -1,7 +1,8 @@
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 use std::ops::{Add, Sub, Neg};
 
-#[pyclass]
+#[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Copy, Debug)]
 pub struct Vec3 {
     pub x: f64,
@@ -14,7 +15,7 @@ impl Vec3{
     }
 }
 
-#[pymethods]
+#[cfg_attr(feature = "python", pymethods)]
 impl Vec3 {
     #[new]
     pub fn new(x: f64, y: f64, z: f64) -> Self {
@@ -64,13 +65,13 @@ impl Neg for Vec3 {
     }
 }
 
-#[pyclass]
+#[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Copy, Debug)]
 pub struct LVec {
+    pub t: f64,
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    pub t: f64,
 }
 impl LVec{
     pub fn zero()->Self{
@@ -78,11 +79,11 @@ impl LVec{
     }
 }
 
-#[pymethods]
+#[cfg_attr(feature = "python", pymethods)]
 impl LVec {
     #[new]
-    pub fn new(x: f64, y: f64, z: f64, t: f64) -> Self {
-        Self { x, y, z, t }
+    pub fn new(t: f64, x: f64, y: f64, z: f64) -> Self {
+        Self { t, x, y, z }
     }
 
     pub fn spatial(&self) -> Vec3 {
@@ -120,10 +121,10 @@ impl Add for LVec {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         Self {
+            t: self.t + rhs.t,
             x: self.x + rhs.x,
             y: self.y + rhs.y,
             z: self.z + rhs.z,
-            t: self.t + rhs.t,
         }
     }
 }
@@ -132,10 +133,10 @@ impl Sub for LVec {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
+            t: self.t - rhs.t,
             x: self.x - rhs.x,
             y: self.y - rhs.y,
             z: self.z - rhs.z,
-            t: self.t - rhs.t,
         }
     }
 }
@@ -144,10 +145,10 @@ impl Neg for LVec {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
+            t: -self.t,
             x: -self.x,
             y: -self.y,
             z: -self.z,
-            t: -self.t,
         }
     }
 }
