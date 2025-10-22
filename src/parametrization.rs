@@ -1,14 +1,6 @@
 use std::f64::consts::PI;
-use enum_dispatch::enum_dispatch;
+use crate::{vectors::Vec3, Parametrization};
 
-use crate::vectors::Vec3;
-
-#[enum_dispatch]
-pub trait ParametrizationTrait : Sync + Send {
-    fn transform(&self, xs: Vec3) -> (Vec3, f64);
-}
-
-// ---------- CARTESIAN PARAMETRIZATION ----------
 pub struct CartesianParam {
     scale: f64,
 }
@@ -18,7 +10,7 @@ impl CartesianParam{
     }
 }
 
-impl ParametrizationTrait for CartesianParam {
+impl Parametrization for CartesianParam {
     fn transform(&self, xs: Vec3) -> (Vec3, f64) {
         // Polynomial map: [0,1] → (-∞, ∞)
         fn poly_map(x: f64) -> f64 {
@@ -43,7 +35,6 @@ impl ParametrizationTrait for CartesianParam {
     }
 }
 
-// ---------- SPHERICAL PARAMETRIZATION ----------
 pub struct SphericalParam {
     scale: f64,
 }
@@ -53,15 +44,15 @@ impl SphericalParam{
         return Self{scale}
     }
 }
-impl ParametrizationTrait for SphericalParam {
+impl Parametrization for SphericalParam {
     fn transform(&self, xs: Vec3) -> (Vec3, f64) {
         let r = xs.x / (1.0 - xs.x);
         let r_jac = 1.0 / (1.0 - xs.x).powi(2);
 
-        let th = xs.y * 2.0 * PI; // θ ∈ [0, 2π]
+        let th = xs.y * 2.0 * PI;
         let th_jac = 2.0 * PI;
 
-        let phi = xs.z * PI; // φ ∈ [0, π]
+        let phi = xs.z * PI;
         let phi_jac = PI;
 
         let (sin_phi, cos_phi) = phi.sin_cos();

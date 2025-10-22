@@ -1,8 +1,5 @@
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 use std::ops::{Add, Sub, Neg};
 
-#[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Copy, Debug)]
 pub struct Vec3 {
     pub x: f64,
@@ -10,14 +7,10 @@ pub struct Vec3 {
     pub z: f64,
 }
 impl Vec3{
-    pub fn zero()->Self{
-        Self::new(0.0,0.0,0.0)
-    }
+    pub const ZERO : Vec3 = Vec3{x:0.0,y:0.0,z:0.0};
 }
 
-#[cfg_attr(feature = "python", pymethods)]
 impl Vec3 {
-    #[new]
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
     }
@@ -65,7 +58,6 @@ impl Neg for Vec3 {
     }
 }
 
-#[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Copy, Debug)]
 pub struct LVec {
     pub t: f64,
@@ -74,14 +66,10 @@ pub struct LVec {
     pub z: f64,
 }
 impl LVec{
-    pub fn zero()->Self{
-        Self::new(0.0,0.0,0.0,0.0)
-    }
+    pub const ZERO : LVec = LVec{t:0.0,x:0.0,y:0.0,z:0.0};
 }
 
-#[cfg_attr(feature = "python", pymethods)]
 impl LVec {
-    #[new]
     pub fn new(t: f64, x: f64, y: f64, z: f64) -> Self {
         Self { t, x, y, z }
     }
@@ -100,19 +88,6 @@ impl LVec {
 
     pub fn t(&self) -> f64 {
         self.t
-    }
-
-    // Python dunder methods
-    fn __add__(&self, other: &Self) -> Self {
-        *self + *other
-    }
-
-    fn __sub__(&self, other: &Self) -> Self {
-        *self - *other
-    }
-
-    fn __neg__(&self) -> Self {
-        -*self
     }
 }
 

@@ -1,37 +1,24 @@
-use crate::{
-    basic::integrands::RealIntegrandTrait, logger::Logger, parametrization::{ParametrizationTrait}, vectors::Vec3, IntegrationResult
-};
+use crate::{Parametrization, vectors::Vec3, Integrand, IntegrationResult, Integrator};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use symbolica::numerical_integration::{ContinuousGrid, Sample};
-use enum_dispatch::enum_dispatch;
 
-#[enum_dispatch]
-pub trait RealIntegratorTrait {
-    fn integrate(
-        &self,
-        integrand: &impl RealIntegrandTrait,
-        parametrization: &impl ParametrizationTrait,
-        logger: &impl Logger,
-    ) -> IntegrationResult;
-}
 
-pub struct VegasIntegrator {
+pub struct HavanaIntegrator {
     epochs: usize,
     iters_per_epoch: usize,
     seed: u64,
 }
-impl VegasIntegrator{
+impl HavanaIntegrator{
     pub fn new(epochs: usize, iters_per_epoch: usize, seed: u64) -> Self{
         Self { epochs, iters_per_epoch, seed }
     }
 }
-impl RealIntegratorTrait for VegasIntegrator {
+impl Integrator<f64, IntegrationResult> for HavanaIntegrator {
     fn integrate(
         &self,
-        integrand: &impl RealIntegrandTrait,
-        param: &impl ParametrizationTrait,
-        logger: &impl Logger,
+        integrand: &impl Integrand<f64>,
+        param: &impl Parametrization,
     ) -> IntegrationResult {
         let mut grid = ContinuousGrid::new(3, 50, 1000, None, false);
         let mut rng = StdRng::seed_from_u64(self.seed);
@@ -52,7 +39,6 @@ impl RealIntegratorTrait for VegasIntegrator {
             grid.update(1.0);
 
             let (mean, err, _) = grid.accumulator.get_live_estimate();
-            logger.info(format!("mean: {mean}, err: {err}"));
         }
 
         let (mean, err, _) = grid.accumulator.get_live_estimate();
@@ -60,23 +46,22 @@ impl RealIntegratorTrait for VegasIntegrator {
     }
 }
 
-pub struct VegasMultiIntegrator {
+pub struct HavanaMultiIntegrator {
     epochs: usize,
     iters_per_epoch: usize,
     seed: u64,
     batches: usize,
 }
-impl VegasMultiIntegrator{
+impl HavanaMultiIntegrator{
     pub fn new(epochs: usize, iters_per_epoch: usize, seed: u64, batches: usize) -> Self{
         Self { epochs, iters_per_epoch, seed, batches }
     }
 }
-impl RealIntegratorTrait for VegasMultiIntegrator {
+impl Integrator<f64, IntegrationResult> for HavanaMultiIntegrator{
     fn integrate(
         &self,
-        integrand: &impl RealIntegrandTrait,
-        param: &impl ParametrizationTrait,
-        logger: &impl Logger,
+        integrand: &impl Integrand<f64>,
+        param: &impl Parametrization,
     ) -> IntegrationResult {
         let mut grid = ContinuousGrid::new(3, 50, 1000, None, false);
 
@@ -108,7 +93,6 @@ impl RealIntegratorTrait for VegasMultiIntegrator {
             grid.update(1.0);
 
             let (mean, err, _) = grid.accumulator.get_live_estimate();
-            logger.info(format!("mean: {mean}, err: {err}"));
         }
 
         let (mean, err, _) = grid.accumulator.get_live_estimate();
