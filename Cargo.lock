@@ -455,6 +455,7 @@ version = "0.1.2"
 dependencies = [
  "enum_dispatch",
  "num-complex",
+ "num-traits",
  "olo_rust",
  "rand",
  "rayon",

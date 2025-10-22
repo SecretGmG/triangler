@@ -1,13 +1,14 @@
 mod common;
 use common::{get_args_result_pairs};
-use triangler::{complex::{integrands::{ImprovedLTD}, integrators::{ComplexIntegrator, ComplexVegasIntegrator}}, parametrization::SphericalParam};
+use triangler::prelude::*;
+use triangler::{implementations::{HavanaIntegrator, ImprovedLTD}, parametrization::SphericalParam};
 
 #[test]
 fn test_havana_complex_improved_ltd() {
     for (args, reference) in get_args_result_pairs() {
 
         let integrand = ImprovedLTD::new(args);
-        let integrator = ComplexVegasIntegrator::new(10,50_000,42);
+        let integrator = HavanaIntegrator::new(10,50_000,42);
         let parametrization = SphericalParam::new(1.0);
 
         let (res_re, res_im) = integrator.integrate(&integrand, &parametrization);

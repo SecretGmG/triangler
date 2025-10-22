@@ -1,6 +1,7 @@
 mod common;
 use common::get_real_args_result_pairs;
-use triangler::{parametrization::SphericalParam, real::{integrands::ImprovedLTD, integrators::HavanaMultiIntegrator}, Integrator};
+use triangler::prelude::*;
+use triangler::{implementations::{HavanaMultiIntegrator, ImprovedLTD}, parametrization::SphericalParam};
 
 #[test]
 fn test_havana_real_improved_ltd() {
