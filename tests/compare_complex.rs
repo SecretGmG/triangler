@@ -1,21 +1,14 @@
 mod common;
-use common::{get_args_result_pairs};
-use triangler::prelude::*;
-use triangler::{implementations::{HavanaIntegrator, ImprovedLTD}, parametrization::SphericalParam};
-
+use triangler::{
+    integrator::{MultiIntegrator},
+    parametrization::SphericalParam,
+    sampler::{RealR3SamplerAggregator},
+};
+use common::test_real_integrator;
 #[test]
 fn test_havana_complex_improved_ltd() {
-    for (args, reference) in get_args_result_pairs() {
-
-        let integrand = ImprovedLTD::new(args);
-        let integrator = HavanaIntegrator::new(10,50_000,42);
-        let parametrization = SphericalParam::new(1.0);
-
-        let (res_re, res_im) = integrator.integrate(&integrand, &parametrization);
-
-        println!("re: {res_re:?}, im: {res_im:?}");
-        println!("{reference:?}");
-        assert!((res_re.mean-reference.re).abs() < res_re.err*2.0);
-        assert!((res_im.mean-reference.im).abs() < res_im.err*2.0);
-    }
+    test_real_integrator(
+        &MultiIntegrator::new(50, 50_000, 10),
+        &mut RealR3SamplerAggregator::new(SphericalParam::new(1.0), 42, 20, 1000),
+    );
 }

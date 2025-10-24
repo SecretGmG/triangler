@@ -1,6 +1,11 @@
 use std::f64::consts::PI;
-use crate::{vectors::Vec3, Parametrization};
+use crate::{vectors::Vec3};
 
+pub trait Parametrization : Clone + Sync + Send {
+    fn transform(&self, xs: Vec3) -> (Vec3, f64);
+}
+
+#[derive(Clone)]
 pub struct CartesianParam {
     scale: f64,
 }
@@ -35,6 +40,8 @@ impl Parametrization for CartesianParam {
     }
 }
 
+
+#[derive(Clone)]
 pub struct SphericalParam {
     scale: f64,
 }
