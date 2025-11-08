@@ -129,11 +129,11 @@ class IntegrandBuilder:
             ct_ij, ct_kl = part_builder.counter_term(self.integrand)
             
             q = (qs[i] - qs[j])/2
-            if mink(q) - m**2 > 0 and q[0] < 0:
+            if q[0] < 0:
                 expr += ct_ij
             
             q = (qs[k] - qs[l])/2
-            if mink(q) - m**2 > 0 and q[0] < 0:
+            if q[0] < 0:
                 expr += ct_kl
         return expr
 
