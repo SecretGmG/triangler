@@ -120,6 +120,7 @@ def plot_slice(
     # Convert to HSV: hue = phase, value = normalized magnitude
     phase = np.angle(ys)
     mag = np.abs(ys)
+    #mag = 1 - 1/(mag**0.5+1)
     mag /= np.max(mag) if np.max(mag) != 0 else 1
 
     # Map phase [-π, π] → hue [0, 1]
