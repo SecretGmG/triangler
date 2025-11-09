@@ -134,7 +134,7 @@ def plot_slice(
     plt.ylabel(axes[y_dim])
 
 
-def plot_line(e: WrappedEvaluator, x_0: NDArray, x_hat: NDArray, lims=(-1, 1), res=300):
+def plot_line(e: WrappedEvaluator, x_0: NDArray, x_hat: NDArray, lims=None, res=300):
     """Plot a complex-valued line along a specified direction in 3D space.
     
     Args:
@@ -144,11 +144,14 @@ def plot_line(e: WrappedEvaluator, x_0: NDArray, x_hat: NDArray, lims=(-1, 1), r
         lims: (t_min, t_max) range of parameter along the line.
         res: number of points to evaluate.
     """
+    if lims is None:
+        lims = (-1,1)
+    
     ts = np.linspace(lims[0], lims[1], res)
 
     xs = x_0[:, None] + x_hat[:, None] * ts
     ys = np.zeros(res, dtype=np.complex128)
-    ys = e.evaluate([xs.reshape(-1,3)]).reshape(res)
+    ys = e.evaluate([xs.T]).reshape(res)
 
     plt.plot(ts, ys.real, label="re")
     plt.plot(ts, ys.imag, label="im")
@@ -192,9 +195,6 @@ class IntegrandBuilder:
 
     def counter_term(self, p1, p2):
         qs = [np.zeros_like(p1), -p1, p2]
-
-        def mink(q):
-            return q[0] ** 2 - sum(q[1:] ** 2)
 
         expr = N(0)
         for i, j, k, l in self.part_indices:
