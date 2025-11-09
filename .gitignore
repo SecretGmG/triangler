@@ -1,6 +1,7 @@
 /target
 
 OneLOopBridge/
+thermal_integrand_examples/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

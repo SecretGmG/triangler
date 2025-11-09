@@ -46,6 +46,8 @@ class SymbolicaLorenzVec:
         return self * other
     def __str__(self):
         return str(self.symbols)
+    def __repr__(self):
+        return str(self)
 
 class SymbolicaVec:
     def __init__(self, symbols : list):
@@ -83,6 +85,7 @@ class SymbolicaVec:
     
     def __neg__(self):
         return SymbolicaVec.zero() - self
-
     def __str__(self):
         return str(self.symbols)
+    def __repr__(self):
+        return str(self)
