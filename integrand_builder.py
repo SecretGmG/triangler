@@ -287,6 +287,9 @@ class IntegrandEtaBuilder:
         )
 
 
+COUNTER_JACOBIAN = False
+
+
 class IntegrandPartBuilder:
     eta_ij: IntegrandEtaBuilder = None
     eta_kl: IntegrandEtaBuilder = None
@@ -295,29 +298,39 @@ class IntegrandPartBuilder:
         self.eta_ij = eta_ij
         self.eta_kl = eta_kl
 
-        self.center = SymbolicaVec.from_name(
-            f"k{eta_ij.i}{eta_ij.j}{eta_kl.i}{eta_kl.j}"
-        )
+        self.center = SymbolicaVec.zero()
+        #self.center = SymbolicaVec.from_name(
+        #    f"k{eta_ij.i}{eta_ij.j}{eta_kl.i}{eta_kl.j}"
+        #)
 
     def improved_ltd(self, k):
         return self.eta_ij.integrand_builder.improved_ltd_prefactor(k) / (
             self.eta_ij.eta(k) * self.eta_kl.eta(k)
         )
 
-    def counter_term(self, k):
+    def counter_term(self, k: SymbolicaVec):
+        
+        r = (k-self.center).squared()**HALF       
+         
         ct_ij = N(0)
         for ct, k_ in self.eta_ij.counter_term(k):
+            
+            r_star = (k_-self.center).squared()**HALF
+            
             ct_ij += (
                 ct
                 * self.eta_ij.integrand_builder.improved_ltd_prefactor(k_)
-                / self.eta_kl.eta(k_)
+                / self.eta_kl.eta(k_) * ((r_star/r)**N(2) if COUNTER_JACOBIAN else N(1))
             )
         ct_kl = N(0)
         for ct, k_ in self.eta_kl.counter_term(k):
+            
+            r_star = (k_-self.center).squared()**HALF
+            
             ct_kl += (
                 ct
                 * self.eta_kl.integrand_builder.improved_ltd_prefactor(k_)
-                / self.eta_ij.eta(k_)
+                / self.eta_ij.eta(k_) * ((r_star/r)**N(2) if COUNTER_JACOBIAN else N(1))
             )
         return ct_ij, ct_kl
 
