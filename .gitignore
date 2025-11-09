@@ -2,6 +2,7 @@
 
 OneLOopBridge/
 thermal_integrand_examples/
+#evaluators/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
