@@ -54,6 +54,7 @@ class IntegrandBuilder:
         return ct
 
 LAMBDA = 1
+RELATIVE_LAMBDA = False
 
 class IntegrandEtaBuilder:
     def __init__(self, integrand_builder: IntegrandBuilder, i, j, center=None):
@@ -124,7 +125,12 @@ class IntegrandEtaBuilder:
             
             d_r : Expression = (r - r_star)
             
-            cutoff = THETA(N(LAMBDA) - d_r * d_r.conjugate() ) #TODO: DONT HARDCODE THIS
+            cutoff = N(1)
+            if LAMBDA > 0:
+                if RELATIVE_LAMBDA:
+                    cutoff = THETA((N(LAMBDA) * r_star)**2 - d_r * d_r.conjugate())
+                else:
+                    cutoff = THETA(N(LAMBDA)**N(2) - d_r * d_r.conjugate() ) #TODO: DONT HARDCODE THIS
                         
             ct = cutoff * THETA(-self.q().symbols[0]) / (d_r * self._derivative(k_star, k_hat))
             out.append((ct, k_star))
