@@ -1,8 +1,11 @@
+from integrator import ComplexIntegrator
 from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
 from wrapped_eval import THETA, WrappedEvaluator
 import numpy as np
 import matplotlib.pyplot as plt
+import oneloop_bridge
+
 
 HALF = N(1) / 2
 
@@ -56,7 +59,7 @@ class IntegrandBuilder:
         integrand = N(0)
         for i, j, k, l in self.part_indices:
             integrand += 1 / (self.eta(i, j, self.k) * self.eta(k, l, self.k))
-        return integrand * self.prefactor(self.k) * self.r ** N(2)
+        return integrand * self.prefactor(self.k)
 
     def eta_radius_roots(self, i, j):
         q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
@@ -113,7 +116,7 @@ class IntegrandBuilder:
             for factor, r_star in self.eta_ct(i, j):
                 selector = THETA(self.thresh - self.r)
                 ct += selector * factor / (self.r - r_star)
-        return ct * self.r ** N(2)
+        return ct
 
     def integrated_counter_term(self):
         ct = N(0)
@@ -155,9 +158,9 @@ class CompiledIntegrand:
         return {
             Expression.PI: complex(np.pi),
             self.integrand_builder.thresh: 1.0,
-            self.integrand_builder.p1: np.array([4, 1, 1, 1]),
-            self.integrand_builder.p2: np.array([4, -1, -2, -1]),
-            self.integrand_builder.m: 1.0 + 0.001j,
+            self.integrand_builder.p1: np.array([-0.005, 0, 0, 0.005]),
+            self.integrand_builder.p2: np.array([0.005, 0, 0, 0.005]),
+            self.integrand_builder.m: 0.02,
         }
 
     def clean_args(self):
@@ -235,15 +238,66 @@ class CompiledIntegrand:
         self.constant_arguments[self.integrand_builder.m] = complex(value)
 
     def eval_integrand(self, k):
-        return self.compiled_integrand.evaluate([k])
+        return self.compiled_integrand.evaluate(np.asarray([k]))
 
     def eval_counterterm(self, k):
-        return self.compiled_counter_term.evaluate([k])
+        return self.compiled_counter_term.evaluate(np.asarray([k]))
 
     def eval_subtracted(self, k):
-        return self.compiled_subtracted.evaluate([k])
+        return self.compiled_subtracted.evaluate(np.asarray([k]))
 
     def compile(self):
         self.compiled_integrand.compile()
         self.compiled_counter_term.compile()
         self.compiled_subtracted.compile()
+    
+
+    def spherical(self, xs):
+        """
+        xs: (N,3) array
+        scale: float
+        returns (v, jac)
+        v: (N,3)
+        jac: (N,)
+        """
+        
+        scale = 1
+        
+        x = xs[:, 0]
+        y = xs[:, 1]
+        z = xs[:, 2]
+
+        r = x / (1.0 - x)
+        r_jac = 1.0 / (1.0 - x)**2
+
+        th = y * 2.0 * np.pi
+        th_jac = 2.0 * np.pi
+
+        phi = z * np.pi
+        phi_jac = np.pi
+
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+
+        v = np.empty_like(xs)
+        v[:, 0] = scale * r * sin_phi * np.cos(th)
+        v[:, 1] = scale * r * sin_phi * np.sin(th)
+        v[:, 2] = scale * r * cos_phi
+
+        jac = r_jac * (r**2) * th_jac * phi_jac * sin_phi * scale**3
+
+        return v, jac
+
+    
+    
+    def integrate_naive(self, epochs, samples_per_epoch):
+        integrator = ComplexIntegrator()
+        integrator.integrate(self.eval_integrand, self.spherical, epochs, samples_per_epoch)
+    
+        
+    
+    def get_reference(self) -> complex:
+        def norm(lvec):
+            return lvec[0]**2 - (lvec[1:]**2).sum()
+        
+        return oneloop_bridge.three_point(norm(self.p1), norm(self.p2), norm(self.p1+self.p2), self.m, self.m, self.m).epsilon_0 * oneloop_bridge.TO_FEYNMAN
