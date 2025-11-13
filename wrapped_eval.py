@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 def print_theta(theta: Expression, mode: PrintMode, **kwargs) -> str | None:
     if mode == PrintMode.Latex:
         if theta.get_type() == AtomType.Fn:
-            return "\mu_{" + ",".join(a.format() for a in theta) + "}"
+            return "\\theta_{" + ",".join(a.format() for a in theta) + "}"
         else:
-            return "\mu"
+            return "\\theta"
 
 THETA = S(
     "Theta",
@@ -24,7 +24,6 @@ EXTERNAL_FUNCTIONS = {
 CUSTOM_HEADER = (
     "template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }"
 )
-
 
 class WrappedEvaluator:
     """
@@ -116,69 +115,3 @@ class WrappedEvaluator:
 
         return np.array(self.evaluator.evaluate(values))
 
-
-def plot_slice(
-    e: WrappedEvaluator, x_dim: int = 0, y_dim: int = 1, lims=(-1, 1, -1, 1), res=300
-):
-    """Plot a 2D slice of a 3D vector field using HSV color encoding for phase and magnitude.
-
-    Args:
-        e: WrappedEvaluator instance to compute values.
-        x_dim, y_dim: indices of axes to plot in the 2D plane.
-        lims: (xmin, xmax, ymin, ymax) bounds for the plot.
-        res: resolution of the grid along each axis.
-    """
-
-    x = np.linspace(lims[0], lims[1], res)
-    y = np.linspace(lims[2], lims[3], res)
-    X, Y = np.meshgrid(x, y)
-
-    x_hat = np.zeros(3)
-    y_hat = np.zeros(3)
-    x_hat[x_dim] = 1
-    y_hat[y_dim] = 1
-
-    xs = X[..., None] * x_hat + Y[..., None] * y_hat
-    ys = e.evaluate([xs.reshape(-1, 3)]).reshape(res, res)
-
-    axes = ["x", "y", "z"]
-
-    # Convert to HSV: hue = phase, value = normalized magnitude
-    phase = np.angle(ys)
-    mag = np.abs(ys)
-    # mag = 1 - 1/(mag**0.5+1)
-    mag /= np.max(mag) if np.max(mag) != 0 else 1
-
-    # Map phase [-π, π] → hue [0, 1]
-    hue = (phase + np.pi) / (2 * np.pi)
-    value = mag
-
-    rgb = plt.cm.hsv(hue)  # hue → color
-    rgb[..., :3] *= value[..., None]  # scale brightness by magnitude
-
-    plt.imshow(rgb, extent=lims, origin="lower", interpolation="nearest")
-    plt.xlabel(axes[x_dim])
-    plt.ylabel(axes[y_dim])
-
-
-def plot_line(e: WrappedEvaluator, x_0: NDArray, x_hat: NDArray, lims=None, res=300):
-    """Plot a complex-valued line along a specified direction in 3D space.
-
-    Args:
-        e: WrappedEvaluator instance.
-        x_0: starting point in 3D space.
-        x_hat: direction vector.
-        lims: (t_min, t_max) range of parameter along the line.
-        res: number of points to evaluate.
-    """
-    if lims is None:
-        lims = (-1, 1)
-
-    ts = np.linspace(lims[0], lims[1], res)
-
-    xs = x_0[:, None] + x_hat[:, None] * ts
-    ys = np.zeros(res, dtype=np.complex128)
-    ys = e.evaluate([xs.T]).reshape(res)
-
-    plt.plot(ts, ys.real, label="re")
-    plt.plot(ts, ys.imag, label="im")
