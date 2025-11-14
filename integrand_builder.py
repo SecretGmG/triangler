@@ -90,13 +90,13 @@ class IntegrandBuilder:
 
         for r_star in poles:
             k_star = r_star * self.k_hat
-            ct = (
+            factor = (
                 selector
                 * self.collect_other_etas(i, j, k_star)
                 * self.prefactor(k_star)
                 / self.ddk_eta(i, j, r_star)
             )
-            out.append((ct, r_star))
+            out.append((factor, r_star))
 
         return out
 
@@ -115,16 +115,17 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
                 selector = THETA(self.thresh - self.r)
-                ct += selector * factor / (self.r - r_star)
+                ct += selector * factor / (self.r - r_star) * (r_star / self.r)**N(2)
         return ct
 
     def integrated_counter_term(self):
         ct = N(0)
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
-                ct += -factor * Expression.LOG(
+                ct += -r_star**N(2) * factor * Expression.LOG(
                     (-self.thresh - r_star) / (self.thresh - r_star)
                 )
+        return ct
 
 
 class CompiledIntegrand:
@@ -132,7 +133,8 @@ class CompiledIntegrand:
         self.integrand_builder = IntegrandBuilder()
         self.integrand = self.integrand_builder.cff_integrand()
         self.counter_term = self.integrand_builder.counter_term()
-
+        self.integrated_counterterm = self.integrand_builder.integrated_counter_term()
+    
         self.constant_arguments = self.get_default_constant_args()
 
         self.compiled_integrand = WrappedEvaluator(
@@ -152,6 +154,12 @@ class CompiledIntegrand:
             self.constant_arguments,
             [self.integrand_builder.k],
             "subtracted",
+        )
+        self.compiled_integrated_counterterm = WrappedEvaluator(
+            self.integrated_counterterm,
+            self.constant_arguments,
+            [self.integrand_builder.k],
+            "integrated_counter_term"
         )
 
     def get_default_constant_args(self):
@@ -245,11 +253,14 @@ class CompiledIntegrand:
 
     def eval_subtracted(self, k):
         return self.compiled_subtracted.evaluate(np.asarray([k]))
+    def eval_integrated_counterterm(self, k):
+        return self.compiled_integrated_counterterm.evaluate(np.asarray([k]))
 
     def compile(self):
         self.compiled_integrand.compile()
         self.compiled_counter_term.compile()
         self.compiled_subtracted.compile()
+        self.compiled_integrated_counterterm.compile()
     
 
     def spherical(self, xs):
@@ -288,13 +299,44 @@ class CompiledIntegrand:
 
         return v, jac
 
-    
+    def spherical_2d(self, xs):
+        y = xs[:, 0]
+        z = xs[:, 1]
+
+        th = y * 2.0 * np.pi
+        th_jac = 2.0 * np.pi
+
+        phi = z * np.pi
+        phi_jac = np.pi
+
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+
+        v = np.empty([xs.shape[0], 3])
+        v[:, 0] = sin_phi * np.cos(th)
+        v[:, 1] = sin_phi * np.sin(th)
+        v[:, 2] = cos_phi
+
+        jac = th_jac * phi_jac * sin_phi
+
+        return v, jac
+        
     
     def integrate_naive(self, epochs, samples_per_epoch):
-        integrator = ComplexIntegrator()
+        integrator = ComplexIntegrator(3)
         return integrator.integrate(self.eval_integrand, self.spherical, epochs, samples_per_epoch)
     
-        
+    def integrate_counterterm_naive(self, epochs, samples_per_epoch):
+        integrator = ComplexIntegrator(3)
+        return integrator.integrate(self.eval_counterterm, self.spherical, epochs, samples_per_epoch)
+    
+    def integrate_subtracted(self, epochs, samples_per_epoch):
+        integrator = ComplexIntegrator(3)
+        return integrator.integrate(self.eval_subtracted, self.spherical, epochs, samples_per_epoch)
+    
+    def integrate_counterterm(self, epochs, samples_per_epoch):
+        integrator = ComplexIntegrator(2)
+        return integrator.integrate(self.eval_integrated_counterterm, self.spherical_2d, epochs, samples_per_epoch)
     
     def get_reference(self) -> complex:
         def norm(lvec):
