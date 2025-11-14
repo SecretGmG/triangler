@@ -292,7 +292,7 @@ class CompiledIntegrand:
     
     def integrate_naive(self, epochs, samples_per_epoch):
         integrator = ComplexIntegrator()
-        integrator.integrate(self.eval_integrand, self.spherical, epochs, samples_per_epoch)
+        return integrator.integrate(self.eval_integrand, self.spherical, epochs, samples_per_epoch)
     
         
     
