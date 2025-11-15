@@ -26,12 +26,12 @@ class IntegrandBuilder:
         pass
 
     eta_indices = [
-        (0, 1),
+        #(0, 1),
         (1, 2),
-        (2, 0),
-        (0, 2),
-        (1, 0),
-        (2, 1),
+        #(2, 0),
+        #(0, 2),
+        #(1, 0),
+        #(2, 1),
     ]
 
     part_indices = [
@@ -115,15 +115,15 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
                 selector = THETA(self.thresh - self.r)
-                ct += selector * factor / (self.r - r_star) * (r_star / self.r)**N(2)
+                ct += selector * factor * (r_star / self.r)**N(2) / (self.r - r_star)
         return ct
 
     def integrated_counter_term(self):
         ct = N(0)
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
-                ct += -r_star**N(2) * factor * Expression.LOG(
-                    (-self.thresh - r_star) / (self.thresh - r_star)
+                ct += r_star**N(2) * factor * Expression.LOG(
+                    (self.thresh - r_star) / (-self.thresh - r_star)
                 )
         return ct
 
@@ -246,15 +246,15 @@ class CompiledIntegrand:
         self.constant_arguments[self.integrand_builder.m] = complex(value)
 
     def eval_integrand(self, k):
-        return self.compiled_integrand.evaluate(np.asarray([k]))
+        return self.compiled_integrand.evaluate(np.asarray([k]))[:,0]
 
     def eval_counterterm(self, k):
-        return self.compiled_counter_term.evaluate(np.asarray([k]))
+        return self.compiled_counter_term.evaluate(np.asarray([k]))[:,0]
 
     def eval_subtracted(self, k):
-        return self.compiled_subtracted.evaluate(np.asarray([k]))
+        return self.compiled_subtracted.evaluate(np.asarray([k]))[:,0]
     def eval_integrated_counterterm(self, k):
-        return self.compiled_integrated_counterterm.evaluate(np.asarray([k]))
+        return self.compiled_integrated_counterterm.evaluate(np.asarray([k]))[:,0]
 
     def compile(self):
         self.compiled_integrand.compile()
@@ -317,9 +317,16 @@ class CompiledIntegrand:
         v[:, 1] = sin_phi * np.sin(th)
         v[:, 2] = cos_phi
 
-        jac = th_jac * phi_jac * sin_phi
+        pdf = th_jac * phi_jac * sin_phi
 
-        return v, jac
+        return v, pdf
+    
+    def line(self, k_hat):
+        k_hat = np.asarray(k_hat)
+        def temp(xs):
+            return ((xs[:,0]*2-1)*self.thresh)[:, None]*k_hat[None,:], (2*self.thresh)
+        return temp
+        
         
     
     def integrate_naive(self, epochs, samples_per_epoch):
@@ -337,6 +344,15 @@ class CompiledIntegrand:
     def integrate_counterterm(self, epochs, samples_per_epoch):
         integrator = ComplexIntegrator(2)
         return integrator.integrate(self.eval_integrated_counterterm, self.spherical_2d, epochs, samples_per_epoch)
+    
+    def eval_counterterum_with_jac(self, ks):
+        jac = (ks**2).sum(axis = 1)
+        return self.eval_counterterm(ks) * jac
+
+    def integrate_counterterm_axis(self, epochs, samples_per_epoch, axis):
+        integrator = ComplexIntegrator(1)
+        
+        return integrator.integrate(self.eval_counterterum_with_jac, self.line(axis), epochs, samples_per_epoch)
     
     def get_reference(self) -> complex:
         def norm(lvec):

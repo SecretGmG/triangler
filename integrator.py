@@ -29,7 +29,7 @@ class ComplexIntegrator:
             
             points, jacs = parametrization(xs)
             
-            values = integrand(points)[:,0] * jacs
+            values = integrand(points) * jacs
             
             self.real_integral.add_training_samples(samples, np.nan_to_num(values.real))
             self.imag_integral.add_training_samples(samples, np.nan_to_num(values.imag))
