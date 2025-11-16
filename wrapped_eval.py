@@ -37,7 +37,7 @@ class WrappedEvaluator:
     evaluator: CompiledComplexEvaluator = None
 
     @staticmethod
-    def _flatten_vectors(
+    def flatten_vectors(
         args: dict[Expression | SymbolicaLorenzVec | SymbolicaVec, float | NDArray],
     ) -> list[NDArray]:
         """
@@ -49,45 +49,52 @@ class WrappedEvaluator:
         flat_values = []
         for key, value in args.items():
             if isinstance(key, SymbolicaLorenzVec):
-                l = list(value.T)
+                l = list(np.asarray(value).T)
                 assert len(l) == 4
                 flat_values += l
             elif isinstance(key, SymbolicaVec):
-                l = list(value.T)
+                l = list(np.asarray(value).T)
                 assert len(l) == 3
                 flat_values += l
             else:
-                flat_values += [value]
+                flat_values += [np.asarray(value)]
 
         return np.atleast_2d(np.column_stack(list(np.broadcast_arrays(*flat_values))))
 
     def __init__(
         self,
         expression: Expression,
-        constant_args: dict[Expression | SymbolicaLorenzVec | SymbolicaVec, NDArray],
         args: list[Expression | SymbolicaLorenzVec | SymbolicaVec],
         name: str,
+        force_rebuild: bool = True
     ):
         self.expression = expression
-        self.constant_args = constant_args
         self.args = args
         self.name = name
+        self.ensure_evaluator(force_rebuild)
 
-    def flat_all_args(self):
+    def flat_args(self):
         """Flatten the list of possibly vector valued arguments into a single list of Expression objects."""
-        all_args = list(list(self.constant_args.keys()) + self.args)
         flat_args = []
-        for arg in all_args:
+        for arg in self.args:
             if isinstance(arg, SymbolicaLorenzVec) or isinstance(arg, SymbolicaVec):
                 flat_args += arg.symbols
             else:
                 flat_args += [arg]
         return flat_args
 
-    def compile(self):
+    def ensure_evaluator(self, force_rebuild):
+        if not force_rebuild:
+            path = f'evaluators/{self.name}.so'
+            try:
+                self.evaluator = CompiledComplexEvaluator.load(path, self.name, len(self.flat_args()), 1)
+                print(f'loaded "{path}"')
+                return
+            except Exception as e:
+                print(f'could not load {path} due to {e}')
         print(f'Compiling evaluator: "{self.name}"')
         self.evaluator: CompiledComplexEvaluator = self.expression.evaluator(
-            {}, {}, self.flat_all_args(), external_functions=EXTERNAL_FUNCTIONS
+            {}, {}, self.flat_args(), external_functions=EXTERNAL_FUNCTIONS
         ).compile(
             self.name,
             f"evaluators/{self.name}.cpp",
@@ -105,13 +112,9 @@ class WrappedEvaluator:
                   Each array should be shaped [N, D], with D=1 for scalars, D=3 for vectors and D=4 for lorentz vectors.
 
         Returns:
-            A NumPy array of evaluated results with shape [N, ...].
+            A NumPy array of evaluated results with shape [N].
         """
-        if self.evaluator is None:
-            self.compile()
         
-        args_dict = self.constant_args | dict(zip(self.args, args))
-        values = WrappedEvaluator._flatten_vectors(args_dict)
-
-        return np.array(self.evaluator.evaluate(values))
+        values = WrappedEvaluator.flatten_vectors(dict(zip(self.args, args)))
+        return np.array(self.evaluator.evaluate(values))[:,0]
 

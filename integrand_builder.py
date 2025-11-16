@@ -1,10 +1,9 @@
-from integrator import ComplexIntegrator
+from plot_util import plot_complex, plot_complex_plane
 from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
 from wrapped_eval import THETA, WrappedEvaluator
 import numpy as np
 import matplotlib.pyplot as plt
-import oneloop_bridge
 
 
 HALF = N(1) / 2
@@ -18,8 +17,10 @@ class IntegrandBuilder:
     k_hat: SymbolicaVec = k.norm()
     m: Expression = S("m")
     thresh: Expression = S("lambda")
-
     qs: list[SymbolicaLorenzVec] = None
+
+    def get_args(self):
+        return [Expression.PI, self.thresh, self.m, self.p1, self.p2, self.k]
 
     def __init__(self):
         self.qs = [SymbolicaLorenzVec.zero(), -self.p1, self.p2]
@@ -55,7 +56,7 @@ class IntegrandBuilder:
     def eta(self, i, j, k):
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
 
-    def cff_integrand(self):
+    def cff(self):
         integrand = N(0)
         for i, j, k, l in self.part_indices:
             integrand += 1 / (self.eta(i, j, self.k) * self.eta(k, l, self.k))
@@ -110,7 +111,7 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
-    def counter_term(self):
+    def ct(self):
         ct = N(0)
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
@@ -118,69 +119,105 @@ class IntegrandBuilder:
                 ct += selector * factor * (r_star / self.r) ** N(2) / (self.r - r_star)
         return ct
 
-    def integrated_counter_term(self):
+    def ct_int(self):
         ct = N(0)
         for i, j in self.eta_indices:
             for factor, r_star in self.eta_ct(i, j):
                 ct += (
                     r_star ** N(2)
                     * factor
-                    * (
-                        Expression.LOG((self.thresh - r_star)/(-self.thresh - r_star))
-                    )
+                    * (Expression.LOG((self.thresh - r_star) / (-self.thresh - r_star)))
                 )
         return ct
 
+def hemispherical(xs):
+    """
+    Uniformly samples points on the unit hemisphere oriented to positive z
+    xs: (N,2) array with entries in [0,1)
+    Returns:
+        v: (N,3) Cartesian coordinates on unit hemisphere
+        jac: (N,) Jacobian for Monte Carlo integration
+    """
+    theta = 2 * np.pi * xs[:, 0]
+    cos_phi = xs[:, 1]
+    sin_phi = np.sqrt(1 - cos_phi**2)
+    v = np.empty([xs.shape[0], 3])
+    v[:, 0] = sin_phi * np.cos(theta)
+    v[:, 1] = sin_phi * np.sin(theta)
+    v[:, 2] = cos_phi
+    jac = 2 * np.pi
+    return v, jac
 
-class CompiledIntegrand:
-    def __init__(self):
-        self.integrand_builder = IntegrandBuilder()
-        self.integrand = self.integrand_builder.cff_integrand()
-        self.counter_term = self.integrand_builder.counter_term()
-        self.integrated_counterterm = self.integrand_builder.integrated_counter_term()
 
-        self.constant_arguments = self.get_default_constant_args()
+def spherical(xs):
+    """
+    Uniformly samples points in 3D with a radial transform r = u / (1-u).
+    xs: (N,3) array with entries in [0,1)
+    Returns:
+        v: (N,3) Cartesian coordinates
+        jac: (N,) Jacobian for Monte Carlo integration
+    """
+    r = xs[:, 0] / (1.0 - xs[:, 0])
+    r_jac = 1.0 / (1.0 - xs[:, 0]) ** 2
+    theta = 2 * np.pi * xs[:, 1]
+    cos_phi = 1 - 2 * xs[:, 2]
+    sin_phi = np.sqrt(1 - cos_phi**2)
+    v = np.empty_like(xs)
+    v[:, 0] = r * sin_phi * np.cos(theta)
+    v[:, 1] = r * sin_phi * np.sin(theta)
+    v[:, 2] = r * cos_phi
+    jac = r_jac * r**2 * 4 * np.pi
+    return v, jac
 
-        self.compiled_integrand = WrappedEvaluator(
-            self.integrand,
-            self.constant_arguments,
-            [self.integrand_builder.k],
-            "integrand",
+
+def line_segment(k_hat, thresh):
+    k_hat = np.asarray(k_hat)
+
+    def temp(xs):
+        return ((xs[:, 0] * 2 - 1) * thresh)[:, None] * k_hat[None, :], (2 * thresh)
+
+    return temp
+
+
+class ContextManager:
+
+    p1 = np.array([4, 1, 1, 1])
+    p2 = np.array([3, -1, 0, 1])
+    m = 1 - 0.01j
+    threshold = 5
+
+    def __init__(self, force_rebuild=True):
+        ib = IntegrandBuilder()
+        self.cff = WrappedEvaluator(ib.cff(), ib.get_args(), "cff", force_rebuild)
+        self.ct = WrappedEvaluator(ib.ct(), ib.get_args(), "ct", force_rebuild)
+        self.sub = WrappedEvaluator(ib.cff() - ib.ct(),ib.get_args(), "sub", force_rebuild)
+        self.ct_int = WrappedEvaluator(ib.ct_int(), ib.get_args(),"ct_int", force_rebuild)
+
+    def get_context_args(self):
+        return [np.pi, self.threshold, self.m, self.p1, self.p2]
+
+    def eval(self, compiled: WrappedEvaluator, k):
+        return compiled.evaluate(self.get_context_args() + [k])
+    
+    def get_reference(self) -> complex:
+        from oneloop_bridge import three_point, TO_FEYNMAN
+
+        def norm(v):
+            return v[0] ** 2 - (v[1:] ** 2).sum()
+
+        return (
+            three_point(
+                norm(self.p1),
+                norm(self.p2),
+                norm(self.p1 + self.p2),
+                self.m,
+                self.m,
+                self.m,
+            ).epsilon_0
+            * TO_FEYNMAN
         )
-        self.compiled_counter_term = WrappedEvaluator(
-            self.counter_term,
-            self.constant_arguments,
-            [self.integrand_builder.k],
-            "counter_term",
-        )
-        self.compiled_subtracted = WrappedEvaluator(
-            self.integrand - self.counter_term,
-            self.constant_arguments,
-            [self.integrand_builder.k],
-            "subtracted",
-        )
-        self.compiled_integrated_counterterm = WrappedEvaluator(
-            self.integrated_counterterm,
-            self.constant_arguments,
-            [self.integrand_builder.k],
-            "integrated_counter_term",
-        )
 
-    def get_default_constant_args(self):
-        return {
-            Expression.PI: complex(np.pi),
-            self.integrand_builder.thresh: 1.0,
-            self.integrand_builder.p1: np.array([-0.005, 0, 0, 0.005]),
-            self.integrand_builder.p2: np.array([0.005, 0, 0, 0.005]),
-            self.integrand_builder.m: 0.02,
-        }
-
-    def clean_args(self):
-        """Boosts the arguments such that p1 + p2 = 0 in spatial components"""
-
-        p1 = np.array(self.p1, dtype=complex)
-        p2 = np.array(self.p2, dtype=complex)
-
+    def normalize_args(self):
         # 4-momentum components: [E, px, py, pz]
         E1, p1_vec = p1[0], p1[1:]
         E2, p2_vec = p2[0], p2[1:]
@@ -209,171 +246,41 @@ class CompiledIntegrand:
             p1 = boost(p1)
             p2 = boost(p2)
 
-        # Set boosted values
         self.p1 = p1
         self.p2 = p2
 
-    @property
-    def thresh(self):
-        return self.constant_arguments[self.integrand_builder.thresh]
+    def plot_threshold_subtraction(
+        self, x_lim, y_lim, x_axis=None, y_axis=None, res=300
+    ):
+        if x_axis is None:
+            x_axis = np.array([1, 0, 0])
+        if y_axis is None:
+            y_axis = np.array([0, 1, 0])
 
-    @thresh.setter
-    def thresh(self, value):
-        self.constant_arguments[self.integrand_builder.thresh] = float(value)
+        x = np.linspace(x_lim[0], x_lim[1], res)
+        y = np.linspace(y_lim[0], y_lim[1], res)
+        X, Y = np.meshgrid(x, y)
 
-    @property
-    def p1(self):
-        return self.constant_arguments[self.integrand_builder.p1]
+        xs_plane = X + Y * 1j
+        ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
+        ks_line = (x_axis[:, None] * x).T
 
-    @p1.setter
-    def p1(self, value):
-        self.constant_arguments[self.integrand_builder.p1] = np.array(
-            value, dtype=float
-        )
+        ks_plane_jac = np.sum(ks_plane**2, axis=1)
+        ks_line_jac = np.sum(ks_line**2, axis=1)
 
-    @property
-    def p2(self):
-        return self.constant_arguments[self.integrand_builder.p2]
-
-    @p2.setter
-    def p2(self, value):
-        self.constant_arguments[self.integrand_builder.p2] = np.array(
-            value, dtype=float
-        )
-
-    @property
-    def m(self):
-        return self.constant_arguments[self.integrand_builder.m]
-
-    @m.setter
-    def m(self, value):
-        self.constant_arguments[self.integrand_builder.m] = complex(value)
-
-    def eval_integrand(self, k):
-        return self.compiled_integrand.evaluate(np.asarray([k]))[:, 0]
-
-    def eval_counterterm(self, k):
-        return self.compiled_counter_term.evaluate(np.asarray([k]))[:, 0]
-
-    def eval_subtracted(self, k):
-        return self.compiled_subtracted.evaluate(np.asarray([k]))[:, 0]
-
-    def eval_integrated_counterterm(self, k):
-        return self.compiled_integrated_counterterm.evaluate(np.asarray([k]))[:, 0]
-
-    def compile(self):
-        self.compiled_integrand.compile()
-        self.compiled_counter_term.compile()
-        self.compiled_subtracted.compile()
-        self.compiled_integrated_counterterm.compile()
-
-    @staticmethod
-    def spherical(xs):
-        """
-        Uniformly samples points in 3D with a radial transform r = u / (1-u).
-
-        xs: (N,3) array with entries in [0,1)
-        Returns:
-            v: (N,3) Cartesian coordinates
-            jac: (N,) Jacobian for Monte Carlo integration
-        """
-        r = xs[:,0] / (1.0 - xs[:,0])
-        r_jac = 1.0 / (1.0 - xs[:,0])**2
-
-        theta = 2 * np.pi * xs[:,1]
-        cos_phi = 1 - 2 * xs[:,2]
-        sin_phi = np.sqrt(1 - cos_phi**2)
-
-        v = np.empty_like(xs)
-        v[:,0] = r * sin_phi * np.cos(theta)
-        v[:,1] = r * sin_phi * np.sin(theta)
-        v[:,2] = r * cos_phi
-
-        jac = r_jac * r**2 * 4*np.pi
-        return v, jac
-
-    @staticmethod
-    def hemi_spherical_2d(xs):
-        """
-        Uniformly samples points on the unit hemi-sphere.
-
-        xs: (N,2) array with entries in [0,1)
-        Returns:
-            v: (N,3) Cartesian coordinates on unit sphere
-            jac: (N,) Jacobian for Monte Carlo integration
-        """
-        theta = 2*np.pi * xs[:,0]
-        cos_phi = xs[:,1]
-        sin_phi = np.sqrt(1 - cos_phi**2)
-
-        v = np.empty([xs.shape[0], 3])
-        v[:,0] = sin_phi * np.cos(theta)
-        v[:,1] = sin_phi * np.sin(theta)
-        v[:,2] = cos_phi
-
-        jac = 2*np.pi
-        return v, jac
-
-    def line(self, k_hat):
-        k_hat = np.asarray(k_hat)
-
-        def temp(xs):
-            return ((xs[:, 0] * 2 - 1) * self.thresh)[:, None] * k_hat[None, :], (
-                2 * self.thresh
-            )
-
-        return temp
-
-    def integrate_naive(self, epochs, samples_per_epoch):
-        integrator = ComplexIntegrator(3)
-        return integrator.integrate(
-            self.eval_integrand, self.spherical, epochs, samples_per_epoch
-        )
-
-    def integrate_counterterm_naive(self, epochs, samples_per_epoch):
-        integrator = ComplexIntegrator(3)
-        return integrator.integrate(
-            self.eval_counterterm, self.spherical, epochs, samples_per_epoch
-        )
-
-    def integrate_subtracted(self, epochs, samples_per_epoch):
-        integrator = ComplexIntegrator(3)
-        return integrator.integrate(
-            self.eval_subtracted, self.spherical, epochs, samples_per_epoch
-        )
-
-    def integrate_counterterm(self, epochs, samples_per_epoch):
-        integrator = ComplexIntegrator(2)
-        return integrator.integrate(
-            self.eval_integrated_counterterm,
-            self.hemi_spherical_2d,
-            epochs,
-            samples_per_epoch,
-        )
-
-    def eval_counterterum_with_jac(self, ks):
-        jac = (ks**2).sum(axis=1)
-        return self.eval_counterterm(ks) * jac
-
-    def integrate_counterterm_axis(self, epochs, samples_per_epoch, axis):
-        integrator = ComplexIntegrator(1)
-
-        return integrator.integrate(
-            self.eval_counterterum_with_jac, self.line(axis), epochs, samples_per_epoch
-        )
-
-    def get_reference(self) -> complex:
-        def norm(lvec):
-            return lvec[0] ** 2 - (lvec[1:] ** 2).sum()
-
-        return (
-            oneloop_bridge.three_point(
-                norm(self.p1),
-                norm(self.p2),
-                norm(self.p1 + self.p2),
-                self.m,
-                self.m,
-                self.m,
-            ).epsilon_0
-            * oneloop_bridge.TO_FEYNMAN
-        )
+        plt.figure(figsize=(20, 10))
+        plt.subplot(2, 3, 1)
+        integrand = (self.eval(self.cff, ks_plane) * ks_plane_jac).reshape(res, res)
+        plot_complex_plane(xs_plane, integrand)
+        plt.subplot(2, 3, 2)
+        counter_term = (self.eval(self.ct, ks_plane) * ks_plane_jac).reshape(res, res)
+        plot_complex_plane(xs_plane, counter_term)
+        plt.subplot(2, 3, 3)
+        subtracted = (self.eval(self.sub, ks_plane) * ks_plane_jac).reshape(res, res)
+        plot_complex_plane(xs_plane, subtracted)
+        plt.subplot(2, 3, 4)
+        plot_complex(x, self.eval(self.cff, ks_line) * ks_line_jac)
+        plt.subplot(2, 3, 5)
+        plot_complex(x, self.eval(self.ct, ks_line) * ks_line_jac)
+        plt.subplot(2, 3, 6)
+        plot_complex(x, self.eval(self.sub, ks_line) * ks_line_jac)
