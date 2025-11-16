@@ -27,12 +27,12 @@ class IntegrandBuilder:
         pass
 
     eta_indices = [
-        (0, 1),
+        #(0, 1),
+        #(2, 1),
+        #(2, 0),
         (1, 2),
-        (2, 0),
         (0, 2),
         (1, 0),
-        (2, 1),
     ]
 
     part_indices = [
@@ -181,8 +181,8 @@ def line_segment(k_hat, thresh):
 
 class ContextManager:
 
-    p1 = np.array([4, 1, 1, 1])
-    p2 = np.array([3, -1, 0, 1])
+    p1 = np.array([3, 1, 1, 1])
+    p2 = np.array([2, -1, 0, 1])
     m = 1 - 0.01j
     threshold = 5
 
@@ -210,9 +210,9 @@ class ContextManager:
                 norm(self.p1),
                 norm(self.p2),
                 norm(self.p1 + self.p2),
-                self.m,
-                self.m,
-                self.m,
+                self.m**2,
+                self.m**2,
+                self.m**2,
             ).epsilon_0
             * TO_FEYNMAN
         )

@@ -15,10 +15,6 @@ class ComplexIntegrator:
     def samples_to_np(samples: list[symbolica.Sample]):
         return np.array(list(map(lambda s: s.c, samples)))
 
-    @staticmethod
-    def sample_weights(samples: list[symbolica.Sample]):
-        return np.array(list(map(lambda s: s.weights)))
-
     def integrate(
         self,
         integrand: Callable,
@@ -27,19 +23,34 @@ class ComplexIntegrator:
         samples_per_epoch: int = 1_000,
     ):
 
-        for _ in tqdm(range(n_epochs)):
+        for _ in range(n_epochs):
             samples = self.sampler.sample(
-                samples_per_epoch, rng=symbolica.RandomNumberGenerator(12, 0)
+                samples_per_epoch, rng=symbolica.RandomNumberGenerator(0, 0)
             )
-            xs = self.samples_to_np(samples)
+            xs = ComplexIntegrator.samples_to_np(samples)
 
             points, jacs = parametrization(xs)
 
             values = integrand(points) * jacs
+            
+            # create boolean mask as a NumPy array
+            mask = np.isfinite(values.real) & np.isfinite(values.imag)
 
-            self.real_integral.add_training_samples(samples, np.nan_to_num(values.real))
-            self.imag_integral.add_training_samples(samples, np.nan_to_num(values.imag))
-            self.sampler.add_training_samples(samples, np.nan_to_num(abs(values)))
+            # ensure samples is a NumPy array
+            samples_np = np.array(samples)
+
+            # filter using the mask
+            samples_f = samples_np[mask]
+            vals_f = values[mask]
+            
+            if not np.all(mask):
+                print(xs[mask])
+                print(values[mask])
+
+            self.real_integral.add_training_samples(samples_f, vals_f.real)
+            self.imag_integral.add_training_samples(samples_f, vals_f.imag)
+            self.sampler.add_training_samples(samples_f, np.abs(vals_f))
+
             self.sampler.update(1.5, 1.5)
         return ComplexIntegratorResult.from_live_estimates(
             real_live_estimate=self.real_integral.get_live_estimate(),
@@ -111,6 +122,25 @@ class ComplexIntegratorResult:
 
         real_avg = self.real_avg + other.real_avg
         imag_avg = self.imag_avg + other.imag_avg
+
+        real_err = np.sqrt(self.real_err**2 + other.real_err**2)
+        imag_err = np.sqrt(self.imag_err**2 + other.imag_err**2)
+
+        iters = self.iters + other.iters
+
+        return ComplexIntegratorResult(
+            real_avg=real_avg,
+            imag_avg=imag_avg,
+            real_err=real_err,
+            imag_err=imag_err,
+            iters=iters,
+        )
+    def __sub__(self, other):
+        if not isinstance(other, ComplexIntegratorResult):
+            return NotImplemented
+
+        real_avg = self.real_avg - other.real_avg
+        imag_avg = self.imag_avg - other.imag_avg
 
         real_err = np.sqrt(self.real_err**2 + other.real_err**2)
         imag_err = np.sqrt(self.imag_err**2 + other.imag_err**2)
