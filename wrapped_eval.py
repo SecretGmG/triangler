@@ -2,7 +2,6 @@ from symbolica import Expression, CompiledComplexEvaluator, S, PrintMode, AtomTy
 from symbolica_vectors import *
 from numpy.typing import NDArray
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 
@@ -21,9 +20,7 @@ THETA = S(
 EXTERNAL_FUNCTIONS = {
     (THETA, "theta"): lambda args: 1.0 * (args[0] > 0),
 }
-CUSTOM_HEADER = (
-    "template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }"
-)
+CUSTOM_HEADER = "template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }"
 
 class WrappedEvaluator:
     """

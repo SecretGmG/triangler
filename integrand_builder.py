@@ -36,17 +36,17 @@ class IntegrandBuilder:
     ]
 
     part_indices = [
-        (0, 1, 0, 2),
         (1, 0, 2, 0),
-        (1, 2, 1, 0),
-        (2, 1, 0, 1),
-        (2, 0, 2, 1),
+        (0, 1, 0, 2),
+        (0, 1, 2, 1),
+        (1, 0, 1, 2),
         (0, 2, 1, 2),
+        (2, 0, 2, 1),
     ]
 
     def ose(self, i: int, k: SymbolicaVec):
-        temp = k - self.qs[i].spacial()
-        return (temp * temp + self.m * self.m) ** HALF
+        temp : Expression = k - self.qs[i].spacial()
+        return (temp.squared() + self.m**N(2))**HALF
 
     def prefactor(self, k: SymbolicaVec):
         return (4 * Expression.PI) ** N(-3) / (
@@ -62,44 +62,57 @@ class IntegrandBuilder:
             integrand += 1 / (self.eta(i, j, self.k) * self.eta(k, l, self.k))
         return integrand * self.prefactor(self.k)
 
-    def eta_radius_roots(self, i, j):
+    def eta_radius_roots(self, i, j, center):
         q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
         v: SymbolicaVec = q.spacial() * (N(1) / q.t())
         q_c: SymbolicaLorenzVec = (self.qs[i] + self.qs[j]) * HALF
-        k_0_p = -q_c.spacial()
+        k_0_p = center-q_c.spacial()
+        
+        k_hat = (self.k-center).norm()
 
-        a = N(1) - (self.k_hat * v) ** N(2)
-        b = N(2) * (self.k_hat * k_0_p) - N(2) * (self.k_hat * v) * (k_0_p * v)
+        a = N(1) - (k_hat * v) ** N(2)
+        b = N(2) * (k_hat * k_0_p) - N(2) * (k_hat * v) * (k_0_p * v)
         c = k_0_p.squared() - (k_0_p * v) ** N(2) - q.squared() + self.m ** N(2)
+        
         d = b ** N(2) - N(4) * a * c
+        
+        
         return [
             (-b + d**HALF) / (N(2) * a),
-            (-b - d**HALF) / (N(2) * a),
-        ]
+            (-b - d**HALF) / (N(2) * a)
+        ], k_hat
 
-    def ddk_eta(self, i, j, r):
-        k = self.k_hat * r
-        d1 = self.k_hat * (k - self.qs[i].spacial()) / self.ose(i, k)
-        d2 = self.k_hat * (k - self.qs[j].spacial()) / self.ose(j, k)
+    def ddk_eta(self, i, j, k_hat, k):
+        d1 = k_hat * (k - self.qs[i].spacial()) / self.ose(i, k)
+        d2 = k_hat * (k - self.qs[j].spacial()) / self.ose(j, k)
         return d1 + d2
 
     def eta_ct(self, i, j) -> list[(Expression, SymbolicaVec)]:
-        selector = THETA(self.qs[j].t() - self.qs[i].t())
-        poles = self.eta_radius_roots(i, j)
+        q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
+        #center: SymbolicaLorenzVec = (self.qs[i] + self.qs[j]).spacial() * HALF
+        center = SymbolicaVec.zero()
+        
+        
+        selector = N(1)
+        # this selector is not necessary if we presuppose q_j > q_i for the uncommented eta_indices
+        #selector *= THETA(self.qs[j].t() - self.qs[i].t())
+        selector *= THETA(q.squared()-self.m**N(2))
+        #center = SymbolicaVec.zero()
+        poles, k_hat = self.eta_radius_roots(i, j, center)
 
         out = []
 
         for r_star in poles:
-            k_star = r_star * self.k_hat
+            k_star = r_star * k_hat + center
             factor = (
-                selector
-                * self.collect_other_etas(i, j, k_star)
+                self.collect_other_etas(i, j, k_star)
+                * selector
                 * self.prefactor(k_star)
-                / self.ddk_eta(i, j, r_star)
+                / self.ddk_eta(i, j, k_hat, k_star)
             )
             out.append((factor, r_star))
 
-        return out
+        return out, center
 
     def collect_other_indices(self, i, j):
         order = j - i
@@ -111,21 +124,37 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
+    @staticmethod
+    def real(e: Expression):
+        return (e + e.conjugate())*HALF
+    
+    @staticmethod
+    def imag(e: Expression):
+        return (e - e.conjugate())*HALF
+    
+    @staticmethod
+    def c_abs(e: Expression):
+        return (e*e.conjugate())**HALF
+        
+    
     def ct(self):
         ct = N(0)
         for i, j in self.eta_indices:
-            for factor, r_star in self.eta_ct(i, j):
-                selector = THETA(self.thresh - self.r)
-                ct += selector * factor * (r_star / self.r) ** N(2) / (self.r - r_star)
+            values, center = self.eta_ct(i, j)
+            r = (self.k-center).squared()**HALF
+            for factor, r_star in values:
+                selector = THETA(self.thresh-r)
+                ct += selector * factor * (r_star / r) ** N(2) / (r - r_star)
         return ct
 
     def ct_int(self):
         ct = N(0)
         for i, j in self.eta_indices:
-            for factor, r_star in self.eta_ct(i, j):
+            values, _ = self.eta_ct(i, j)
+            for factor, r_star in values:
                 ct += (
-                    r_star ** N(2)
-                    * factor
+                    factor
+                    * r_star ** N(2)
                     * (Expression.LOG((self.thresh - r_star) / (-self.thresh - r_star)))
                 )
         return ct
@@ -181,10 +210,10 @@ def line_segment(k_hat, thresh):
 
 class ContextManager:
 
-    p1 = np.array([3, 1, 1, 1])
-    p2 = np.array([2, -1, 0, 1])
-    m = 1 - 0.01j
-    threshold = 5
+    p1 = np.array([3, 1, 0, 1])
+    p2 = np.array([4, 0, 2, -1])
+    m = 0.02
+    threshold = 10
 
     def __init__(self, force_rebuild=True):
         ib = IntegrandBuilder()
@@ -204,50 +233,22 @@ class ContextManager:
 
         def norm(v):
             return v[0] ** 2 - (v[1:] ** 2).sum()
-
-        return (
-            three_point(
+        
+        res = three_point(
                 norm(self.p1),
                 norm(self.p2),
                 norm(self.p1 + self.p2),
                 self.m**2,
                 self.m**2,
                 self.m**2,
-            ).epsilon_0
+            )
+        assert res.epsilon_minus_1 == 0
+        assert res.epsilon_minus_2 == 0
+
+        return (
+            res.epsilon_0
             * TO_FEYNMAN
         )
-
-    def normalize_args(self):
-        # 4-momentum components: [E, px, py, pz]
-        E1, p1_vec = p1[0], p1[1:]
-        E2, p2_vec = p2[0], p2[1:]
-
-        # total momentum and energy
-        P_vec = p1_vec + p2_vec
-        E_tot = E1 + E2
-        P_mag2 = np.dot(P_vec, P_vec)
-        P_mag = np.sqrt(P_mag2.real)
-
-        # If already in COM frame, skip boost
-        if P_mag < 1e-12:
-            pass
-        else:
-            beta = P_vec / E_tot  # boost velocity vector
-            beta2 = np.dot(beta, beta)
-            gamma = 1.0 / np.sqrt(1.0 - beta2)
-
-            def boost(p):
-                E, p_vec = p[0], p[1:]
-                bp = np.dot(beta, p_vec)
-                E_prime = gamma * (E - bp)
-                p_prime = p_vec + ((gamma - 1) * bp / beta2 - gamma * E) * beta
-                return np.array([E_prime, *p_prime], dtype=complex)
-
-            p1 = boost(p1)
-            p2 = boost(p2)
-
-        self.p1 = p1
-        self.p2 = p2
 
     def plot_threshold_subtraction(
         self, x_lim, y_lim, x_axis=None, y_axis=None, res=300
@@ -284,3 +285,36 @@ class ContextManager:
         plot_complex(x, self.eval(self.ct, ks_line) * ks_line_jac)
         plt.subplot(2, 3, 6)
         plot_complex(x, self.eval(self.sub, ks_line) * ks_line_jac)
+    
+    def normalize_args(self):
+        """
+        Apply a Lorentz boost such that the spatial sum of p1+p2 is zero.
+        Updates self.p1 and self.p2 in place.
+        
+        swaps p1 and p2 if p1.0 > p2.0
+        """
+        p1, p2 = self.p1.copy(), self.p2.copy()
+        
+        # Spatial sum
+        p_sum = p1[1:] + p2[1:]
+        norm_p = np.linalg.norm(p_sum)
+        if norm_p == 0:
+            return  # Already normalized
+    
+        # Boost along the direction of p_sum
+        E_sum = p1[0] + p2[0]
+        beta = p_sum / E_sum
+        gamma = 1 / np.sqrt(1 - np.dot(beta, beta))
+    
+        def boost(p):
+            E = p[0]
+            p_vec = p[1:]
+            factor = (gamma - 1) * np.dot(p_vec, beta) / np.dot(beta, beta) - gamma * E
+            p_new = p_vec + factor * beta
+            E_new = gamma * (E - np.dot(beta, p_vec))
+            return np.array([E_new, *p_new])
+    
+        self.p1 = boost(p1)
+        self.p2 = boost(p2)
+        if self.p1[0]>self.p2[0]:
+            self.p1, self.p2 = self.p2, self.p1
