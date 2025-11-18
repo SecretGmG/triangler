@@ -95,9 +95,8 @@ class IntegrandBuilder:
         
         selector = N(1)
         # this selector is not necessary if we presuppose q_j > q_i for the uncommented eta_indices
-        #selector *= THETA(self.qs[j].t() - self.qs[i].t())
+        #selector *= THETA(-q.t())
         selector *= THETA(q.squared()-self.m**N(2))
-        #center = SymbolicaVec.zero()
         poles, k_hat = self.eta_radius_roots(i, j, center)
 
         out = []
@@ -143,8 +142,10 @@ class IntegrandBuilder:
             values, center = self.eta_ct(i, j)
             r = (self.k-center).squared()**HALF
             for factor, r_star in values:
-                selector = THETA(self.thresh-r)
-                ct += selector * factor * (r_star / r) ** N(2) / (r - r_star)
+                #offset = self.c_abs(self.real(r_star))*HALF
+                #selector = THETA(r_star + offset - r)*THETA(r - (offset - r_star))
+                selector = THETA(self.thresh - self.r)
+                ct += selector * factor * (self.real(r_star) / r) ** N(2) / (r - r_star)
         return ct
 
     def ct_int(self):
@@ -152,50 +153,78 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             values, _ = self.eta_ct(i, j)
             for factor, r_star in values:
+                #offset = self.c_abs(self.real(r_star))*HALF
+                #upper = self.real(r_star) + offset
+                #lower = self.real(r_star) - offset
+                upper = self.thresh
+                lower = -self.thresh
                 ct += (
                     factor
-                    * r_star ** N(2)
-                    * (Expression.LOG((self.thresh - r_star) / (-self.thresh - r_star)))
+                    * self.real(r_star) ** N(2)
+                    * (Expression.LOG((upper - r_star) / (lower - r_star)))
                 )
         return ct
 
+import numpy as np
+
 def hemispherical(xs):
     """
-    Uniformly samples points on the unit hemisphere oriented to positive z
-    xs: (N,2) array with entries in [0,1)
+    Uniformly sample points on the unit hemisphere (z >= 0).
+    xs: (N,2) array with values in [0,1)
     Returns:
         v: (N,3) Cartesian coordinates on unit hemisphere
-        jac: (N,) Jacobian for Monte Carlo integration
+        jac: (N,) Jacobian (area element) for Monte Carlo integration
     """
+    xs = np.asarray(xs)
+    if xs.ndim != 2 or xs.shape[1] != 2:
+        raise ValueError("xs must have shape (N,2)")
+    N = xs.shape[0]
+
     theta = 2 * np.pi * xs[:, 0]
     cos_phi = xs[:, 1]
-    sin_phi = np.sqrt(1 - cos_phi**2)
-    v = np.empty([xs.shape[0], 3])
+    # numeric safety: enforce range and avoid tiny negative under sqrt due to fp error
+    cos_phi = np.clip(cos_phi, 0.0, 1.0)
+    sin_phi = np.sqrt(np.clip(1.0 - cos_phi**2, 0.0, None))
+
+    v = np.empty((N, 3), dtype=float)
     v[:, 0] = sin_phi * np.cos(theta)
     v[:, 1] = sin_phi * np.sin(theta)
     v[:, 2] = cos_phi
-    jac = 2 * np.pi
+
+    jac = np.full(N, 2.0 * np.pi)
     return v, jac
 
 
 def spherical(xs):
     """
-    Uniformly samples points in 3D with a radial transform r = u / (1-u).
-    xs: (N,3) array with entries in [0,1)
+    Sample points in R^3 with radial transform r = u/(1-u) (u in [0,1) -> r in [0,inf)).
+    xs: (N,3) array with values in [0,1)
     Returns:
         v: (N,3) Cartesian coordinates
-        jac: (N,) Jacobian for Monte Carlo integration
+        jac: (N,) Jacobian for Monte Carlo integration (dV / d(u1,u2,u3))
     """
-    r = xs[:, 0] / (1.0 - xs[:, 0])
-    r_jac = 1.0 / (1.0 - xs[:, 0]) ** 2
-    theta = 2 * np.pi * xs[:, 1]
-    cos_phi = 1 - 2 * xs[:, 2]
-    sin_phi = np.sqrt(1 - cos_phi**2)
-    v = np.empty_like(xs)
+    xs = np.asarray(xs)
+    if xs.ndim != 2 or xs.shape[1] != 3:
+        raise ValueError("xs must have shape (N,3)")
+    u = xs[:, 0]
+    if np.any(u >= 1.0):
+        raise ValueError("xs[:,0] must be < 1.0 (u < 1)")
+
+    # radial transform and its derivative
+    r = u / (1.0 - u)
+    r_jac = 1.0 / (1.0 - u) ** 2
+
+    theta = 2.0 * np.pi * xs[:, 1]
+    cos_phi = 1.0 - 2.0 * xs[:, 2]
+    cos_phi = np.clip(cos_phi, -1.0, 1.0)
+    sin_phi = np.sqrt(np.clip(1.0 - cos_phi**2, 0.0, None))
+
+    v = np.empty_like(xs, dtype=float)
     v[:, 0] = r * sin_phi * np.cos(theta)
     v[:, 1] = r * sin_phi * np.sin(theta)
     v[:, 2] = r * cos_phi
-    jac = r_jac * r**2 * 4 * np.pi
+
+    jac = r_jac * r**2 * 4.0 * np.pi
     return v, jac
 
 
@@ -213,7 +242,7 @@ class ContextManager:
     p1 = np.array([3, 1, 0, 1])
     p2 = np.array([4, 0, 2, -1])
     m = 0.02
-    threshold = 10
+    threshold = 5
 
     def __init__(self, force_rebuild=True):
         ib = IntegrandBuilder()
