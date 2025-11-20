@@ -1,13 +1,28 @@
 from plot_util import plot_complex, plot_complex_plane
 from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
-from wrapped_eval import THETA, WrappedEvaluator
+from wrapped_eval import THETA, WrappedEvaluator, SQRT_I_EPS
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 HALF = N(1) / 2
 
+EPS = N(np.finfo(np.float64).eps)
+I_EPS = Expression.I * EPS
+
+def sqrt(e: Expression):
+    return e**HALF
+
+def real(e: Expression):
+    return (e + e.conjugate())*HALF
+
+def imag(e: Expression):
+    return (e - e.conjugate())*HALF
+
+def c_abs(e: Expression):
+    return IntegrandBuilder.sqrt(e*e.conjugate())
+        
 
 class IntegrandBuilder:
     p1: SymbolicaLorenzVec = SymbolicaLorenzVec.from_name("p1")
@@ -46,13 +61,13 @@ class IntegrandBuilder:
 
     def ose(self, i: int, k: SymbolicaVec):
         temp : Expression = k - self.qs[i].spacial()
-        return (temp.squared() + self.m**N(2))**HALF
+        return sqrt(temp.squared() + self.m**N(2))
 
     def prefactor(self, k: SymbolicaVec):
         return (4 * Expression.PI) ** N(-3) / (
             self.ose(0, k) * self.ose(1, k) * self.ose(2, k)
         )
-
+    
     def eta(self, i, j, k):
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
 
@@ -78,8 +93,8 @@ class IntegrandBuilder:
         
         
         return [
-            (-b + d**HALF) / (N(2) * a),
-            (-b - d**HALF) / (N(2) * a)
+            (-b + sqrt(d + I_EPS)) / (N(2) * a),
+            (-b - sqrt(d + I_EPS)) / (N(2) * a)
         ], k_hat
 
     def ddk_eta(self, i, j, k_hat, k):
@@ -123,29 +138,18 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
-    @staticmethod
-    def real(e: Expression):
-        return (e + e.conjugate())*HALF
-    
-    @staticmethod
-    def imag(e: Expression):
-        return (e - e.conjugate())*HALF
-    
-    @staticmethod
-    def c_abs(e: Expression):
-        return (e*e.conjugate())**HALF
-        
+
     
     def ct(self):
         ct = N(0)
         for i, j in self.eta_indices:
             values, center = self.eta_ct(i, j)
-            r = (self.k-center).squared()**HALF
+            r = sqrt((self.k-center).squared())
             for factor, r_star in values:
-                #offset = self.c_abs(self.real(r_star))*HALF
+                #offset = c_abs(real(r_star))*HALF
                 #selector = THETA(r_star + offset - r)*THETA(r - (offset - r_star))
                 selector = THETA(self.thresh - self.r)
-                ct += selector * factor * (self.real(r_star) / r) ** N(2) / (r - r_star)
+                ct += selector * factor * (real(r_star) / r) ** N(2) / (r - r_star)
         return ct
 
     def ct_int(self):
@@ -153,15 +157,18 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             values, _ = self.eta_ct(i, j)
             for factor, r_star in values:
-                #offset = self.c_abs(self.real(r_star))*HALF
-                #upper = self.real(r_star) + offset
-                #lower = self.real(r_star) - offset
+                #offset = c_abs(self.real(r_star))*HALF
+                #upper = real(r_star) + offset
+                #lower = real(r_star) - offset
                 upper = self.thresh
                 lower = -self.thresh
+                
+                corrected_log = Expression.LOG((upper-r_star)/(lower-r_star))
+                
                 ct += (
                     factor
-                    * self.real(r_star) ** N(2)
-                    * (Expression.LOG((upper - r_star) / (lower - r_star)))
+                    * real(r_star) ** N(2)
+                    * corrected_log
                 )
         return ct
 

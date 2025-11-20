@@ -5,22 +5,21 @@ import numpy as np
 
 
 
-def print_theta(theta: Expression, mode: PrintMode, **kwargs) -> str | None:
-    if mode == PrintMode.Latex:
-        if theta.get_type() == AtomType.Fn:
-            return "\\theta_{" + ",".join(a.format() for a in theta) + "}"
-        else:
-            return "\\theta"
-
-THETA = S(
-    "Theta",
-    custom_print=print_theta,
-)
+THETA = S("Theta")
+SQRT_I_EPS = S("sqrt_i_eps")
 
 EXTERNAL_FUNCTIONS = {
     (THETA, "theta"): lambda args: 1.0 * (args[0] > 0),
+    (SQRT_I_EPS, "sqrt_i_eps"): lambda args: 1.0 * (args[0].conjugate()**0.5).conjugate()
 }
-CUSTOM_HEADER = "template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }"
+CUSTOM_HEADER = """
+template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }
+template<typename T> T sqrt_i_eps(T x) {
+    auto w = sqrt(x);
+    if (abs(x.imag()) < 1e-15 && x.real() < 0.0) {w = std::conj(w);}
+    return w;
+}
+"""
 
 class WrappedEvaluator:
     """
