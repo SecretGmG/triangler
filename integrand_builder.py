@@ -1,3 +1,4 @@
+from typing import Any
 from plot_util import plot_complex, plot_complex_plane
 from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
@@ -25,29 +26,22 @@ def c_abs(e: Expression):
         
 
 class IntegrandBuilder:
-    p1: SymbolicaLorenzVec = SymbolicaLorenzVec.from_name("p1")
-    p2: SymbolicaLorenzVec = SymbolicaLorenzVec.from_name("p2")
+    qs: list[SymbolicaLorenzVec] = [SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)]
     k: SymbolicaVec = SymbolicaVec.from_name("k")
     r = k.squared() ** HALF
     k_hat: SymbolicaVec = k.norm()
     m: Expression = S("m")
     thresh: Expression = S("lambda")
-    qs: list[SymbolicaLorenzVec] = None
 
-    def get_args(self):
-        return [Expression.PI, self.thresh, self.m, self.p1, self.p2, self.k]
 
-    def __init__(self):
-        self.qs = [SymbolicaLorenzVec.zero(), -self.p1, self.p2]
-        pass
 
     eta_indices = [
+        (0, 1),
+        (1, 2),
+        (0, 2),
         #(0, 1),
         #(2, 1),
         #(2, 0),
-        (1, 2),
-        (0, 2),
-        (1, 0),
     ]
 
     part_indices = [
@@ -58,6 +52,9 @@ class IntegrandBuilder:
         (0, 2, 1, 2),
         (2, 0, 2, 1),
     ]
+    
+    def get_args(self):
+        return [Expression.PI, self.thresh, self.m] + self.qs + [self.k]
 
     def ose(self, i: int, k: SymbolicaVec):
         temp : Expression = k - self.qs[i].spacial()
@@ -109,9 +106,12 @@ class IntegrandBuilder:
         
         
         selector = N(1)
-        # this selector is not necessary if we presuppose q_j > q_i for the uncommented eta_indices
+        # this selector could be optimized away by asserting e.g. qs[0].t() < qs[1].t() < qs[2].t()
         #selector *= THETA(-q.t())
-        selector *= THETA(q.squared()-self.m**N(2))
+        
+        # this selector is not necessary, the subtraction will still work for 'non-existent' threshold singularities
+        #selector *= THETA(q.squared()-self.m**N(2))
+        
         poles, k_hat = self.eta_radius_roots(i, j, center)
 
         out = []
@@ -173,6 +173,9 @@ class IntegrandBuilder:
         return ct
 
 import numpy as np
+
+def norm(v):
+    return v[0] ** 2 - (v[1:] ** 2).sum()
 
 def hemispherical(xs):
     """
@@ -246,20 +249,46 @@ def line_segment(k_hat, thresh):
 
 class ContextManager:
 
-    p1 = np.array([3, 1, 0, 1])
-    p2 = np.array([4, 0, 2, -1])
-    m = 0.02
+    p1 = np.array([2, 1, 0, 0])
+    p2 = np.array([2, 0, 1, 0])
+    m = 0.5
     threshold = 5
 
     def __init__(self, force_rebuild=True):
         ib = IntegrandBuilder()
+        self.ib = ib
         self.cff = WrappedEvaluator(ib.cff(), ib.get_args(), "cff", force_rebuild)
         self.ct = WrappedEvaluator(ib.ct(), ib.get_args(), "ct", force_rebuild)
         self.sub = WrappedEvaluator(ib.cff() - ib.ct(),ib.get_args(), "sub", force_rebuild)
         self.ct_int = WrappedEvaluator(ib.ct_int(), ib.get_args(),"ct_int", force_rebuild)
 
+    def get_threshold_report(self):
+        qs = self.get_qs()
+        print(f'm² = {self.m**2}')
+        
+
+        def ose_at_origin(i):
+            return np.sqrt(np.sum(qs[i][1:]**2) + self.m**2)
+        
+        
+        for (i,j) in self.ib.eta_indices:
+            q = 0.5*(qs[i]-qs[j])
+            q2 = norm(q)
+            
+            print(f'q = {q}')
+            print(f'q² = {q2}')
+            
+            eta_at_origin = ose_at_origin(i) + ose_at_origin(j) + qs[i][0] - qs[j][0]
+            
+            print(f'E-surface value at origin = {eta_at_origin}')
+            
+    def get_qs(self):
+        qs = [np.zeros_like(self.p1), -self.p1, self.p2]
+        return sorted(qs, key = lambda q: q[0])
+        
+    
     def get_context_args(self):
-        return [np.pi, self.threshold, self.m, self.p1, self.p2]
+        return [np.pi, self.threshold, self.m] + self.get_qs()
 
     def eval(self, compiled: WrappedEvaluator, k):
         return compiled.evaluate(self.get_context_args() + [k])
@@ -267,8 +296,7 @@ class ContextManager:
     def get_reference(self) -> complex:
         from oneloop_bridge import three_point, TO_FEYNMAN
 
-        def norm(v):
-            return v[0] ** 2 - (v[1:] ** 2).sum()
+
         
         res = three_point(
                 norm(self.p1),
@@ -322,35 +350,23 @@ class ContextManager:
         plt.subplot(2, 3, 6)
         plot_complex(x, self.eval(self.sub, ks_line) * ks_line_jac)
     
-    def normalize_args(self):
-        """
-        Apply a Lorentz boost such that the spatial sum of p1+p2 is zero.
-        Updates self.p1 and self.p2 in place.
-        
-        swaps p1 and p2 if p1.0 > p2.0
-        """
-        p1, p2 = self.p1.copy(), self.p2.copy()
-        
-        # Spatial sum
-        p_sum = p1[1:] + p2[1:]
-        norm_p = np.linalg.norm(p_sum)
-        if norm_p == 0:
-            return  # Already normalized
-    
-        # Boost along the direction of p_sum
-        E_sum = p1[0] + p2[0]
-        beta = p_sum / E_sum
-        gamma = 1 / np.sqrt(1 - np.dot(beta, beta))
-    
-        def boost(p):
-            E = p[0]
-            p_vec = p[1:]
-            factor = (gamma - 1) * np.dot(p_vec, beta) / np.dot(beta, beta) - gamma * E
-            p_new = p_vec + factor * beta
-            E_new = gamma * (E - np.dot(beta, p_vec))
-            return np.array([E_new, *p_new])
-    
-        self.p1 = boost(p1)
-        self.p2 = boost(p2)
-        if self.p1[0]>self.p2[0]:
-            self.p1, self.p2 = self.p2, self.p1
+    def plot_planes(self, evaluator: WrappedEvaluator,x_lim, y_lim, res = 300):
+        plt.figure(figsize=(20, 7))
+        for i,(x_,y_) in enumerate([(0,1),(1,2),(2,0)]):
+            x_axis = np.zeros(3)
+            y_axis = np.zeros(3)
+            x_axis[x_] = 1
+            y_axis[y_] = 1
+            
+            x = np.linspace(x_lim[0], x_lim[1], res)
+            y = np.linspace(y_lim[0], y_lim[1], res)
+            X, Y = np.meshgrid(x, y)
+            xs_plane = X + Y * 1j
+            ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
+            ks_plane_jac = np.sum(ks_plane**2, axis=1)
+
+            plt.subplot(1, 3, i+1)
+            integrand = (self.eval(self.cff, ks_plane) * ks_plane_jac).reshape(res, res)
+            plot_complex_plane(xs_plane, integrand)
+            plt.xlabel(['x', 'y', 'z'][x_])
+            plt.ylabel(['x', 'y', 'z'][y_])
