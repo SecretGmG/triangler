@@ -1,7 +1,6 @@
 from typing import Callable
 import symbolica
 import numpy as np
-from tqdm import tqdm
 
 
 class ComplexIntegrator:
@@ -21,11 +20,14 @@ class ComplexIntegrator:
         parametrization: Callable,
         n_epochs: int = 100,
         samples_per_epoch: int = 1_000,
+        rng = None
     ):
+        if rng is None:
+            rng=symbolica.RandomNumberGenerator(0, 0)
 
         for _ in range(n_epochs):
             samples = self.sampler.sample(
-                samples_per_epoch, rng=symbolica.RandomNumberGenerator(0, 0)
+                samples_per_epoch, rng
             )
             xs = ComplexIntegrator.samples_to_np(samples)
 

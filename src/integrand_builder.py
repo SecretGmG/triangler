@@ -1,8 +1,7 @@
-from typing import Any
-from plot_util import plot_complex, plot_complex_plane
-from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
+from .plot_util import plot_complex, plot_complex_plane
+from .symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
-from wrapped_eval import THETA, WrappedEvaluator, SQRT_I_EPS
+from .wrapped_eval import THETA, WrappedEvaluator
 import numpy as np
 import matplotlib.pyplot as plt
 

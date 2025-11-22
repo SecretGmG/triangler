@@ -1,5 +1,5 @@
 from symbolica import Expression, CompiledComplexEvaluator, S, PrintMode, AtomType
-from symbolica_vectors import *
+from .symbolica_vectors import *
 from numpy.typing import NDArray
 import numpy as np
 
@@ -81,7 +81,7 @@ class WrappedEvaluator:
 
     def ensure_evaluator(self, force_rebuild):
         if not force_rebuild:
-            path = f'evaluators/{self.name}.so'
+            path = f'../evaluators/{self.name}.so'
             try:
                 self.evaluator = CompiledComplexEvaluator.load(path, self.name, len(self.flat_args()), 1)
                 print(f'loaded "{path}"')
@@ -93,8 +93,8 @@ class WrappedEvaluator:
             {}, {}, self.flat_args(), external_functions=EXTERNAL_FUNCTIONS
         ).compile(
             self.name,
-            f"evaluators/{self.name}.cpp",
-            f"evaluators/{self.name}.so",
+            f"../evaluators/{self.name}.cpp",
+            f"../evaluators/{self.name}.so",
             number_type="complex",
             custom_header=CUSTOM_HEADER,
         )
