@@ -174,7 +174,7 @@ class IntegrandBuilder:
         return ct
     
     def combined_result(self):
-        integrated_ct_factor = THETA(self.thresh - self.r) / (N(2)*self.r**N(2)*self.thresh)
+        integrated_ct_factor = THETA(self.thresh - self.r) / (N(2)/N(3)*self.thresh**N(3))
         return self.unsubtracted()*self.a - self.ct()*self.b + self.integrated_counterterm()*self.c*integrated_ct_factor
         
 
@@ -322,24 +322,35 @@ class ContextManager:
         ks_plane_jac = np.sum(ks_plane**2, axis=1)
         ks_line_jac = np.sum(ks_line**2, axis=1)
 
+        self.a = 1
+        self.b = 0
+        self.c = 0
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 3, 1)
-        integrand = (self.eval(self.cff, ks_plane) * ks_plane_jac).reshape(res, res)
+        integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, integrand)
-        plt.subplot(2, 3, 2)
-        counter_term = (self.eval(self.ct, ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, counter_term)
-        plt.subplot(2, 3, 3)
-        subtracted = (self.eval(self.sub, ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, subtracted)
         plt.subplot(2, 3, 4)
-        plot_complex(x, self.eval(self.cff, ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        
+        self.a = 0
+        self.b = 1
+        self.c = 0
+        plt.subplot(2, 3, 2)
+        counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+        plot_complex_plane(xs_plane, counter_term)
         plt.subplot(2, 3, 5)
-        plot_complex(x, self.eval(self.ct, ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        
+        self.a = 1
+        self.b = 1
+        self.c = 0
+        plt.subplot(2, 3, 3)
+        subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+        plot_complex_plane(xs_plane, subtracted)
         plt.subplot(2, 3, 6)
-        plot_complex(x, self.eval(self.sub, ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
     
-    def plot_planes(self, evaluator: WrappedEvaluator,x_lim, y_lim, res = 300):
+    def plot_planes(self,x_lim, y_lim, res = 300):
         plt.figure(figsize=(20, 7))
         for i,(x_,y_) in enumerate([(0,1),(1,2),(2,0)]):
             x_axis = np.zeros(3)
@@ -355,7 +366,7 @@ class ContextManager:
             ks_plane_jac = np.sum(ks_plane**2, axis=1)
 
             plt.subplot(1, 3, i+1)
-            integrand = (self.eval(self.cff, ks_plane) * ks_plane_jac).reshape(res, res)
+            integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
             plot_complex_plane(xs_plane, integrand)
             plt.xlabel(['x', 'y', 'z'][x_])
             plt.ylabel(['x', 'y', 'z'][y_])
@@ -367,6 +378,9 @@ class ContextManager:
         U, V = np.meshgrid(u, v)
         xs = np.stack([U,V], axis=-1).reshape(-1,2)
         ks, _ = hemispherical(xs)
-        plot_complex_plane(U + V*1j, self.eval(self.ct_int, ks).reshape(res,res))
+        self.a = 0
+        self.b = 0
+        self.c = 1
+        plot_complex_plane(U + V*1j, self.eval(ks).reshape(res,res))
         plt.xlabel(r'$\theta/2\pi$')
         plt.ylabel(r'$\cos(\phi)$')
