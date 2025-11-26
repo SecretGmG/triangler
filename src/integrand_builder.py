@@ -29,10 +29,12 @@ class IntegrandBuilder:
     k: SymbolicaVec = SymbolicaVec.from_name("k")
     r = k.squared() ** HALF
     k_hat: SymbolicaVec = k.norm()
-    m: Expression = S("m")
+    masses = [S(f'm{i}') for i in range(3)]
     thresh: Expression = S("lambda")
-
-
+    
+    a = S('a')
+    b = S('b')
+    c = S('c')
 
     eta_indices = [
         (0, 1),
@@ -53,11 +55,11 @@ class IntegrandBuilder:
     ]
     
     def get_args(self):
-        return [Expression.PI, self.thresh, self.m] + self.qs + [self.k]
+        return [Expression.PI,self.thresh, self.a, self.b, self.c] + self.masses + self.qs + [self.k]
 
     def ose(self, i: int, k: SymbolicaVec):
         temp : Expression = k - self.qs[i].spacial()
-        return sqrt(temp.squared() + self.m**N(2))
+        return sqrt(temp.squared() + self.masses[i]**N(2))
 
     def prefactor(self, k: SymbolicaVec):
         return (4 * Expression.PI) ** N(-3) / (
@@ -67,7 +69,7 @@ class IntegrandBuilder:
     def eta(self, i, j, k):
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
 
-    def cff(self):
+    def unsubtracted(self):
         integrand = N(0)
         for i, j, k, l in self.part_indices:
             integrand += 1 / (self.eta(i, j, self.k) * self.eta(k, l, self.k))
@@ -83,7 +85,9 @@ class IntegrandBuilder:
 
         a = N(1) - (k_hat * v) ** N(2)
         b = N(2) * (k_hat * k_0_p) - N(2) * (k_hat * v) * (k_0_p * v)
-        c = k_0_p.squared() - (k_0_p * v) ** N(2) - q.squared() + self.m ** N(2)
+        
+        m = self.masses[0] # TEMPORARY THIS NEEDS TO BE SWAPPED TO THE IMPROVED FORMULA
+        c = k_0_p.squared() - (k_0_p * v) ** N(2) - q.squared() + m ** N(2)
         
         d = b ** N(2) - N(4) * a * c
         
@@ -137,8 +141,6 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
-
-    
     def ct(self):
         ct = N(0)
         for i, j in self.eta_indices:
@@ -151,7 +153,7 @@ class IntegrandBuilder:
                 ct += selector * factor * (real(r_star) / r) ** N(2) / (r - r_star)
         return ct
 
-    def ct_int(self):
+    def integrated_counterterm(self):        
         ct = N(0)
         for i, j in self.eta_indices:
             values, _ = self.eta_ct(i, j)
@@ -170,6 +172,11 @@ class IntegrandBuilder:
                     * corrected_log
                 )
         return ct
+    
+    def combined_result(self):
+        integrated_ct_factor = THETA(self.thresh - self.r) / (N(2)*self.r**N(2)*self.thresh)
+        return self.unsubtracted()*self.a - self.ct()*self.b + self.integrated_counterterm()*self.c*integrated_ct_factor
+        
 
 import numpy as np
 
@@ -185,15 +192,11 @@ def hemispherical(xs):
         jac: (N,) Jacobian (area element) for Monte Carlo integration
     """
     xs = np.asarray(xs)
-    if xs.ndim != 2 or xs.shape[1] != 2:
-        raise ValueError("xs must have shape (N,2)")
     N = xs.shape[0]
 
     theta = 2 * np.pi * xs[:, 0]
     cos_phi = xs[:, 1]
-    # numeric safety: enforce range and avoid tiny negative under sqrt due to fp error
-    cos_phi = np.clip(cos_phi, 0.0, 1.0)
-    sin_phi = np.sqrt(np.clip(1.0 - cos_phi**2, 0.0, None))
+    sin_phi = np.sqrt(1.0 - cos_phi**2)
 
     v = np.empty((N, 3), dtype=float)
     v[:, 0] = sin_phi * np.cos(theta)
@@ -213,28 +216,14 @@ def spherical(xs):
         jac: (N,) Jacobian for Monte Carlo integration (dV / d(u1,u2,u3))
     """
     xs = np.asarray(xs)
-    if xs.ndim != 2 or xs.shape[1] != 3:
-        raise ValueError("xs must have shape (N,3)")
-    u = xs[:, 0]
-    if np.any(u >= 1.0):
-        raise ValueError("xs[:,0] must be < 1.0 (u < 1)")
+    w = 2*xs[:, 2]-1 # (-1,1)
+    r = w-1/w    
+    r_jac = (1+1/w**2)*2
 
-    # radial transform and its derivative
-    r = u / (1.0 - u)
-    r_jac = 1.0 / (1.0 - u) ** 2
+    v, h_jac = hemispherical(xs[:,0:2])
 
-    theta = 2.0 * np.pi * xs[:, 1]
-    cos_phi = 1.0 - 2.0 * xs[:, 2]
-    cos_phi = np.clip(cos_phi, -1.0, 1.0)
-    sin_phi = np.sqrt(np.clip(1.0 - cos_phi**2, 0.0, None))
-
-    v = np.empty_like(xs, dtype=float)
-    v[:, 0] = r * sin_phi * np.cos(theta)
-    v[:, 1] = r * sin_phi * np.sin(theta)
-    v[:, 2] = r * cos_phi
-
-    jac = r_jac * r**2 * 4.0 * np.pi
-    return v, jac
+    jac = r_jac * r**2 * h_jac
+    return r[:,None]*v, jac
 
 
 def line_segment(k_hat, thresh):
@@ -248,27 +237,28 @@ def line_segment(k_hat, thresh):
 
 class ContextManager:
 
+    origin = np.array([0, 0, 0, 0])
+    
     p1 = np.array([2, 1, 0, 0])
     p2 = np.array([2, 0, 1, 0])
-    m = 0.5
+    masses = [0.5,0.5,0.5]
     threshold = 5
+    a = 1
+    b = 1
+    c = 1
+    
 
     def __init__(self, force_rebuild=True):
         ib = IntegrandBuilder()
         self.ib = ib
-        self.cff = WrappedEvaluator(ib.cff(), ib.get_args(), "cff", force_rebuild)
-        self.ct = WrappedEvaluator(ib.ct(), ib.get_args(), "ct", force_rebuild)
-        self.sub = WrappedEvaluator(ib.cff() - ib.ct(),ib.get_args(), "sub", force_rebuild)
-        self.ct_int = WrappedEvaluator(ib.ct_int(), ib.get_args(),"ct_int", force_rebuild)
+        
+        self.evaluator = WrappedEvaluator(ib.combined_result(), ib.get_args(), 'combined_result', force_rebuild)
 
     def get_threshold_report(self):
         qs = self.get_qs()
-        print(f'm² = {self.m**2}')
         
-
         def ose_at_origin(i):
-            return np.sqrt(np.sum(qs[i][1:]**2) + self.m**2)
-        
+            return np.sqrt(np.sum(qs[i][1:]**2) + self.masses[i]**2)
         
         for (i,j) in self.ib.eta_indices:
             q = 0.5*(qs[i]-qs[j])
@@ -282,15 +272,15 @@ class ContextManager:
             print(f'E-surface value at origin = {eta_at_origin}')
             
     def get_qs(self):
-        qs = [np.zeros_like(self.p1), -self.p1, self.p2]
+        qs = [self.origin + np.zeros_like(self.p1), self.origin - self.p1, self.origin + self.p2]
         return sorted(qs, key = lambda q: q[0])
         
     
     def get_context_args(self):
-        return [np.pi, self.threshold, self.m] + self.get_qs()
+        return [np.pi,self.threshold, self.a, self.b, self.c] + self.masses + self.get_qs()
 
-    def eval(self, compiled: WrappedEvaluator, k):
-        return compiled.evaluate(self.get_context_args() + [k])
+    def eval(self, k):
+        return self.evaluator.evaluate(self.get_context_args() + [k])
     
     def get_reference(self) -> complex:
         from oneloop_bridge import three_point, TO_FEYNMAN
@@ -301,9 +291,9 @@ class ContextManager:
                 norm(self.p1),
                 norm(self.p2),
                 norm(self.p1 + self.p2),
-                self.m**2,
-                self.m**2,
-                self.m**2,
+                self.masses[0]**2,
+                self.masses[1]**2,
+                self.masses[2]**2,
             )
         assert res.epsilon_minus_1 == 0
         assert res.epsilon_minus_2 == 0
@@ -369,3 +359,14 @@ class ContextManager:
             plot_complex_plane(xs_plane, integrand)
             plt.xlabel(['x', 'y', 'z'][x_])
             plt.ylabel(['x', 'y', 'z'][y_])
+    
+    def plot_integrated_counterterm(self, res = 300):
+        u = np.linspace(0,1, res)
+        v = np.linspace(0,1, res)
+        
+        U, V = np.meshgrid(u, v)
+        xs = np.stack([U,V], axis=-1).reshape(-1,2)
+        ks, _ = hemispherical(xs)
+        plot_complex_plane(U + V*1j, self.eval(self.ct_int, ks).reshape(res,res))
+        plt.xlabel(r'$\theta/2\pi$')
+        plt.ylabel(r'$\cos(\phi)$')
