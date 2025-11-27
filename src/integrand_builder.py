@@ -28,7 +28,7 @@ class IntegrandBuilder:
     qs: list[SymbolicaLorenzVec] = [SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)]
     k: SymbolicaVec = SymbolicaVec.from_name("k")
     r = k.squared() ** HALF
-    k_hat: SymbolicaVec = k.norm()
+    k_hat: SymbolicaVec = k.normalized()
     masses = [S(f'm{i}') for i in range(3)]
     thresh: Expression = S("lambda")
     
@@ -78,16 +78,29 @@ class IntegrandBuilder:
     def eta_radius_roots(self, i, j, center):
         q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
         v: SymbolicaVec = q.spacial() * (N(1) / q.t())
-        q_c: SymbolicaLorenzVec = (self.qs[i] + self.qs[j]) * HALF
-        k_0_p = center-q_c.spacial()
+        k_0_p = center-(self.qs[i] + self.qs[j]).spacial() * HALF
         
-        k_hat = (self.k-center).norm()
+        k_hat = (self.k-center).normalized()
 
-        a = N(1) - (k_hat * v) ** N(2)
-        b = N(2) * (k_hat * k_0_p) - N(2) * (k_hat * v) * (k_0_p * v)
         
-        m = self.masses[0] # TEMPORARY THIS NEEDS TO BE SWAPPED TO THE IMPROVED FORMULA
-        c = k_0_p.squared() - (k_0_p * v) ** N(2) - q.squared() + m ** N(2)
+        k_hat_v = k_hat * v
+        delta = (self.masses[i] ** N(2) - self.masses[j] ** N(2)) / (N(4) * q.t())
+        m_2_avg = (self.masses[i]**N(2) + self.masses[j]**N(2)) / N(2)
+        
+        a = N(1) - k_hat_v ** N(2)
+        
+        b = N(2) * (
+                (k_hat * k_0_p)\
+                -k_hat_v * (k_0_p * v)\
+                +delta * k_hat_v
+            )
+        
+        c = k_0_p.squared()\
+            - (k_0_p * v) ** N(2) \
+            + 2*delta*(k_0_p * v)\
+            - q.squared()\
+            + m_2_avg\
+            - delta**2
         
         d = b ** N(2) - N(4) * a * c
         
@@ -103,7 +116,7 @@ class IntegrandBuilder:
         return d1 + d2
 
     def eta_ct(self, i, j) -> list[(Expression, SymbolicaVec)]:
-        q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
+        #q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
         #center: SymbolicaLorenzVec = (self.qs[i] + self.qs[j]).spacial() * HALF
         center = SymbolicaVec.zero()
         
@@ -113,7 +126,7 @@ class IntegrandBuilder:
         #selector *= THETA(-q.t())
         
         # this selector is not necessary, the subtraction will still work for 'non-existent' threshold singularities
-        #selector *= THETA(q.squared()-self.m**N(2))
+        # selector *= THETA(q.squared()-self.m**N(2))
         
         poles, k_hat = self.eta_radius_roots(i, j, center)
 

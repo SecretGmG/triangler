@@ -14,7 +14,7 @@ class SymbolicaLorenzVec:
     def spacial(self):
         return SymbolicaVec(self.symbols[1:])
     
-    def norm(self):
+    def normalized(self):
         return self * (1/self.squared()**(N(1)/2))
     
     def squared(self):
@@ -62,7 +62,7 @@ class SymbolicaVec:
         return SymbolicaVec([N(0),N(0),N(0)])
     
         
-    def norm(self):
+    def normalized(self):
         return self * (1/self.squared()**(N(1)/2))
     
     def squared(self):
