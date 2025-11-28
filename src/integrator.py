@@ -4,6 +4,12 @@ import numpy as np
 
 
 class ComplexIntegrator:
+    """
+    Integrator for complex functions
+    
+    keeps track of the real and imaginary parts separately, 
+    uses the absolute value of the integrand as the weight
+    """
 
     def __init__(self, n_dims):
         self.sampler = symbolica.NumericalIntegrator.continuous(n_dims=n_dims)
@@ -20,7 +26,8 @@ class ComplexIntegrator:
         parametrization: Callable,
         n_epochs: int = 100,
         samples_per_epoch: int = 1_000,
-        rng = None
+        rng = None,
+        learning_weight = 1.5
     ):
         if rng is None:
             rng=symbolica.RandomNumberGenerator(0, 0)
@@ -35,25 +42,12 @@ class ComplexIntegrator:
 
             values = integrand(points) * jacs
             
-            # create boolean mask as a NumPy array
-            mask = np.isfinite(values.real) & np.isfinite(values.imag)
+            self.real_integral.add_training_samples(samples, values.real)
+            self.imag_integral.add_training_samples(samples, values.imag)
+            self.sampler.add_training_samples(samples, np.abs(values))
 
-            # ensure samples is a NumPy array
-            samples_np = np.array(samples)
-
-            # filter using the mask
-            samples_f = samples_np[mask]
-            vals_f = values[mask]
-            
-            if not np.all(mask):
-                print(xs[mask])
-                print(values[mask])
-
-            self.real_integral.add_training_samples(samples_f, vals_f.real)
-            self.imag_integral.add_training_samples(samples_f, vals_f.imag)
-            self.sampler.add_training_samples(samples_f, np.abs(vals_f))
-
-            self.sampler.update(1.5, 1.5)
+            self.sampler.update(0, learning_weight)
+        
         return ComplexIntegratorResult.from_live_estimates(
             real_live_estimate=self.real_integral.get_live_estimate(),
             imag_live_estimate=self.imag_integral.get_live_estimate(),
@@ -61,12 +55,16 @@ class ComplexIntegrator:
 
 
 class ComplexIntegratorResult:
+    """
+    represents the result of a complex monte carlo integration
+    keeps track of the real and imaginary values and errors, and the total number of iterations
+    """
+    
     real_avg = 0
     imag_avg = 0
     real_err = 0
     imag_err = 0
     iters = 0
-    imag_live_estimate: tuple
 
 
 class ComplexIntegratorResult:

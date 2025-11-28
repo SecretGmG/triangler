@@ -327,7 +327,8 @@ class ContextManager:
     
     provides functions to integrate and plot the integrand
     """
-
+    origin = np.array([0,0,0,0])
+    
     p1 = np.array([2, 1, 0, 0])
     p2 = np.array([2, -1, 0, 0])
     masses = [1, 1, -0.01j, 1 - 0.1j]

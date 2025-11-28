@@ -1,18 +1,21 @@
 from symbolica import N, S, N
 
 class SymbolicaLorenzVec:
+    """
+    represents a lorentz vector of symbolic components
+    """
     def __init__(self, symbols : list):
-        self.symbols = symbols
+        self.values = symbols
     @staticmethod
     def from_name(name):
         symbols = [S(f'{name}_{i}')for i in range(4)]
         return SymbolicaLorenzVec(symbols)
     
     def t(self):
-        return self.symbols[0]
+        return self.values[0]
 
     def spacial(self):
-        return SymbolicaVec(self.symbols[1:])
+        return SymbolicaVec(self.values[1:])
     
     def normalized(self):
         return self * (1/self.squared()**(N(1)/2))
@@ -25,33 +28,33 @@ class SymbolicaLorenzVec:
         return SymbolicaLorenzVec([N(0),N(0),N(0),N(0)])
     
     def get_subs_dict(self, values):
-        return {sym : N(num) for sym, num in zip(self.symbols, values)}
+        return {sym : N(num) for sym, num in zip(self.values, values)}
     
     def __add__(self, other):
         if isinstance(other, SymbolicaLorenzVec):
-            return SymbolicaLorenzVec([a+b for a, b in zip(self.symbols, other.symbols)])
-        return [a+other for a in self.symbols]
+            return SymbolicaLorenzVec([a+b for a, b in zip(self.values, other.values)])
+        return [a+other for a in self.values]
     def __sub__(self, other):
         if isinstance(other, SymbolicaLorenzVec):
-            return SymbolicaLorenzVec([a-b for a, b in zip(self.symbols, other.symbols)])
-        return SymbolicaLorenzVec([a+other for a in self.symbols])
+            return SymbolicaLorenzVec([a-b for a, b in zip(self.values, other.values)])
+        return SymbolicaLorenzVec([a+other for a in self.values])
     def __neg__(self):
         return SymbolicaLorenzVec.zero() - self
 
     def __mul__(self, other):
         if isinstance(other, SymbolicaLorenzVec):
-            return self.symbols[0]*other.symbols[0]-self.spacial()*other.spacial()
-        return SymbolicaLorenzVec([a*other for a in self.symbols])
+            return self.values[0]*other.values[0]-self.spacial()*other.spacial()
+        return SymbolicaLorenzVec([a*other for a in self.values])
     def __rmul__(self, other):
         return self * other
     def __str__(self):
-        return str(self.symbols)
+        return str(self.values)
     def __repr__(self):
         return str(self)
 
 class SymbolicaVec:
     def __init__(self, symbols : list):
-        self.symbols = symbols
+        self.values = symbols
     @staticmethod
     def from_name(name):
         values = [S(f'{name}_{i}')for i in range(1,4)]
@@ -70,22 +73,22 @@ class SymbolicaVec:
 
     def __add__(self, other):
         if isinstance(other, SymbolicaVec):
-            return SymbolicaVec([a+b for a, b in zip(self.symbols, other.symbols)])
-        return SymbolicaVec([a+other for a in self.symbols])
+            return SymbolicaVec([a+b for a, b in zip(self.values, other.values)])
+        return SymbolicaVec([a+other for a in self.values])
     def __sub__(self, other):
         if isinstance(other, SymbolicaVec):
-            return SymbolicaVec([a-b for a, b in zip(self.symbols, other.symbols)])
-        return SymbolicaVec([a-other for a in self.symbols])
+            return SymbolicaVec([a-b for a, b in zip(self.values, other.values)])
+        return SymbolicaVec([a-other for a in self.values])
     def __mul__(self, other):
         if isinstance(other, SymbolicaVec):
-            return sum(a*b for a, b in zip(self.symbols, other.symbols))
-        return SymbolicaVec([a*other for a in self.symbols])
+            return sum(a*b for a, b in zip(self.values, other.values))
+        return SymbolicaVec([a*other for a in self.values])
     def __rmul__(self, other):
         return self * other
     
     def __neg__(self):
         return SymbolicaVec.zero() - self
     def __str__(self):
-        return str(self.symbols)
+        return str(self.values)
     def __repr__(self):
         return str(self)

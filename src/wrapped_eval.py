@@ -74,7 +74,7 @@ class WrappedEvaluator:
         flat_args = []
         for arg in self.args:
             if isinstance(arg, SymbolicaLorenzVec) or isinstance(arg, SymbolicaVec):
-                flat_args += arg.symbols
+                flat_args += arg.values
             else:
                 flat_args += [arg]
         return flat_args
