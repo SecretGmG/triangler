@@ -36,7 +36,7 @@ def c_abs(e: Expression):
     """
     returns the absolute value of e
     """
-    return IntegrandBuilder.sqrt(e * e.conjugate())
+    return sqrt(e * e.conjugate())
 
 
 class IntegrandBuilder:
@@ -144,14 +144,21 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        )
+        ) - I_EPS
 
         d = b ** N(2) - N(4) * a * c
-
+        
+        #selector = THETA((m_2_avg - q.squared() + delta**2 * (1-2*v*v)/(1-v*v)))
+        #selector = THETA(-self.eta(i, j, SymbolicaVec.zero()))
+        #selector = N(1)
+        #selector = THETA(d)
+        selector = THETA(N(2)*q.t()**N(2) - q.spacial().squared() - m_2_avg)
+        
+        
         return [
-            (-b + sqrt(d + I_EPS)) / (N(2) * a),
-            (-b - sqrt(d + I_EPS)) / (N(2) * a),
-        ]
+            (-b + sqrt(d)) / (N(2) * a),
+            (-b - sqrt(d)) / (N(2) * a),
+        ], selector
 
     def ddk_eta(self, i, j, k):
         """
@@ -165,22 +172,18 @@ class IntegrandBuilder:
         """
         returns the counterterm for the e-surface (i,j) when parameterized around the origin
         """
-        # selector = N(1)
-        # not necessary because we order the qs such that qs[0].t() < qs[1].t() < qs[2].t()
-        # thus the eta_indices all fulfill this exactly.
-        # selector *= THETA(-q.t())
-
-        # not necessary because we can subtract all complex roots
-        # selector *= THETA(q.squared()-self.m**N(2))
-
-        poles = self.eta_radius_roots(i, j)
+        poles, selector = self.eta_radius_roots(i, j)
 
         out = []
 
         for r_star in poles:
             k_star = r_star * self.k_hat
+            
+            selector = THETA(N(0.00001)-c_abs(self.eta(i, j, k_star)))
+            
             factor = (
                 self.collect_other_etas(i, j, k_star)
+                * selector
                 * self.prefactor(k_star)
                 / self.ddk_eta(i, j, k_star)
             )
@@ -212,7 +215,7 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             values = self.eta_ct(i, j)
             for factor, r_star in values:
-                selector = THETA(self.thresh - self.r)
+                selector = THETA(self.thresh-self.r)
                 ct += (
                     selector
                     * factor
@@ -247,7 +250,7 @@ class IntegrandBuilder:
         integrating this over R^3 gives the result of the integral
         """
         integrated_ct_factor = THETA(self.thresh - self.r) / (
-            N(2) / N(3) * self.thresh ** N(3)
+            N(2) / N(3) * (self.thresh**N(3))
         )
         return (
             self.unsubtracted() * self.a
@@ -376,20 +379,25 @@ class ContextManager:
         ordered such that q0_0 < q1_0 < q2_0
         """
         qs = [
+            self.origin + self.p1,
             self.origin + np.zeros_like(self.p1),
-            self.origin - self.p1,
-            self.origin + self.p2,
+            self.origin - self.p2,
         ]
-        return sorted(qs, key=lambda q: q[0])
+        
+        return qs
+
 
     def get_context_args(self):
         """
         returns the arguments of the integrand as a list except for the k argument
         """
+        
+        ordered_qs, ordered_masses = zip(*sorted(zip(self.get_qs(),self.masses), key=lambda q: q[0][0]))
+        
         return (
             [np.pi, self.threshold, self.a, self.b, self.c]
-            + self.masses
-            + self.get_qs()
+            + list(ordered_masses)
+            + list(ordered_qs)
         )
 
     def eval(self, k):
@@ -418,7 +426,7 @@ class ContextManager:
         return res.epsilon_0 * TO_FEYNMAN
 
     def plot_threshold_subtraction(
-        self, x_lim, y_lim, x_axis=None, y_axis=None, res=100
+        self, x_lim, y_lim, x_axis=None, y_axis=None, res=200
     ):
         """
         Visualizes the threshold subtraction procedure
@@ -485,7 +493,7 @@ class ContextManager:
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
 
-    def plot_integrated_counterterm(self, res=100):
+    def plot_integrated_counterterm(self, res=200):
         """
         plots the integrated counterterm along the unit hemisphere
         """
@@ -499,3 +507,30 @@ class ContextManager:
         plot_complex_plane(U + V * 1j, self.eval(ks).reshape(res, res))
         plt.xlabel(r"$\theta/2\pi$")
         plt.ylabel(r"$\cos(\phi)$")
+
+    def set_external_momenta(self, p12, p22, p32):
+        """
+        Set p1 and p2 in the center-of-momentum frame.
+        p1^2 = p12, p2^2 = p22, (p1 + p2)^2 = p32.
+        """
+    
+        s = p32
+        sqrt_s = np.sqrt(s)
+    
+        # energies in the COM frame
+        E1 = (s + p12 - p22) / (2.0 * sqrt_s)
+        E2 = (s + p22 - p12) / (2.0 * sqrt_s)
+    
+        # common three-momentum magnitude
+        p_abs_sq = E1**2 - p12
+        if p_abs_sq < 0:
+            raise ValueError("Kinematic point is not physically allowed (negative momentum^2).")
+    
+        p_abs = np.sqrt(p_abs_sq)
+    
+        # pick them back-to-back along z
+        self.p1 = np.array([E1, 0.0, 0.0,  p_abs])
+        self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
+        
+            
+    

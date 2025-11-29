@@ -42,6 +42,11 @@ class ComplexIntegrator:
 
             values = integrand(points) * jacs
             
+            mask = np.isfinite(values)
+            
+            values = values[mask]
+            samples = np.array(samples)[mask]
+            
             self.real_integral.add_training_samples(samples, values.real)
             self.imag_integral.add_training_samples(samples, values.imag)
             self.sampler.add_training_samples(samples, np.abs(values))
