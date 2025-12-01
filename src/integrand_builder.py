@@ -36,7 +36,7 @@ def c_abs(e: Expression):
     """
     returns the absolute value of e
     """
-    return sqrt(e * e.conjugate())
+    return  sqrt(e * e.conjugate())
 
 
 class IntegrandBuilder:
@@ -144,21 +144,18 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        ) - I_EPS
+        )
 
         d = b ** N(2) - N(4) * a * c
         
-        #selector = THETA((m_2_avg - q.squared() + delta**2 * (1-2*v*v)/(1-v*v)))
-        #selector = THETA(-self.eta(i, j, SymbolicaVec.zero()))
-        #selector = N(1)
-        #selector = THETA(d)
-        selector = THETA(N(2)*q.t()**N(2) - q.spacial().squared() - m_2_avg)
+        # Not needed if the causal prescription is tracked properly!
+        # selector = THETA(N(2)*q.t()**N(2) - q.spacial().squared() - m_2_avg)
         
         
         return [
             (-b + sqrt(d)) / (N(2) * a),
             (-b - sqrt(d)) / (N(2) * a),
-        ], selector
+        ]
 
     def ddk_eta(self, i, j, k):
         """
@@ -172,18 +169,15 @@ class IntegrandBuilder:
         """
         returns the counterterm for the e-surface (i,j) when parameterized around the origin
         """
-        poles, selector = self.eta_radius_roots(i, j)
+        poles = self.eta_radius_roots(i, j)
 
         out = []
 
         for r_star in poles:
             k_star = r_star * self.k_hat
             
-            selector = THETA(N(0.00001)-c_abs(self.eta(i, j, k_star)))
-            
             factor = (
                 self.collect_other_etas(i, j, k_star)
-                * selector
                 * self.prefactor(k_star)
                 / self.ddk_eta(i, j, k_star)
             )
