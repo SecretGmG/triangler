@@ -36,7 +36,7 @@ def c_abs(e: Expression):
     """
     returns the absolute value of e
     """
-    return  sqrt(e * e.conjugate())
+    return sqrt(e * e.conjugate())
 
 
 class IntegrandBuilder:
@@ -144,12 +144,9 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        )
+        ) + I_EPS
 
         d = b ** N(2) - N(4) * a * c
-        
-        # Not needed if the causal prescription is tracked properly!
-        # selector = THETA(N(2)*q.t()**N(2) - q.spacial().squared() - m_2_avg)
         
         
         return [
@@ -176,8 +173,11 @@ class IntegrandBuilder:
         for r_star in poles:
             k_star = r_star * self.k_hat
             
+            selector = THETA(N(1e-5)-c_abs(self.eta(i, j, k_star)))
+            
             factor = (
                 self.collect_other_etas(i, j, k_star)
+                * selector
                 * self.prefactor(k_star)
                 / self.ddk_eta(i, j, k_star)
             )
