@@ -141,14 +141,14 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        ) - I_EPS
+        )
 
         d = b ** N(2) - N(4) * a * c
         
         
         return [
-            (-b + sqrt(d)) / (N(2) * a),
-            (-b - sqrt(d)) / (N(2) * a),
+            (-b + sqrt(d)) / (N(2) * a) + I_EPS, # necessary for the log to select the correct branch
+            (-b - sqrt(d)) / (N(2) * a) - I_EPS, # necessary for the log to select the correct branch
         ]
 
     def ddk_eta(self, i, j, k):
