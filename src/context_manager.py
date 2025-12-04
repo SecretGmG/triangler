@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .integrand_builder import IntegrandBuilder
-from .plot_util import plot_complex, plot_complex_plane
-from .wrapped_eval import WrappedEvaluator
+from integrand_builder import IntegrandBuilder
+from plot_util import plot_complex, plot_complex_plane
+from wrapped_eval import WrappedEvaluator
 
 def norm(v):
     return v[0] ** 2 - (v[1:] ** 2).sum()
@@ -65,14 +65,12 @@ def line_segment(k_hat, thresh):
     return temp
 
 
-class ContextManager:
+class TriangleIntegrandContext:
     """
-    manages the parameters of the integrand like external momenta and internal masses.
-    provides functions to extract the correct arguments for the integrand builder
-    and evaluate the integrand
+    Manages the context of the triangle integrand
+    provides functions for setting up the integrand
+    """
     
-    provides functions to integrate and plot the integrand
-    """
     origin = np.array([0,0,0,0])
     
     p1 = np.array([2, 1, 0, 0])
@@ -107,15 +105,7 @@ class ContextManager:
         self.a = 1
         self.b = 1
         self.c = 0
-
-    def __init__(self, force_rebuild=True):
-        ib = IntegrandBuilder()
-        self.ib = ib
-
-        self.evaluator = WrappedEvaluator(
-            ib.combined_result(), ib.get_args(), "combined_result", force_rebuild
-        )
-
+    
     def get_qs(self):
         """
         returns the qs arguments of the integrand as a list
@@ -128,9 +118,8 @@ class ContextManager:
         ]
         
         return qs
-
-
-    def get_context_args(self):
+    
+    def get_args(self):
         """
         returns the arguments of the integrand as a list except for the k argument
         """
@@ -142,13 +131,7 @@ class ContextManager:
             + list(ordered_masses)
             + list(ordered_qs)
         )
-
-    def eval(self, k):
-        """
-        evaluates the integrand at k
-        """
-        return self.evaluator.evaluate(self.get_context_args() + [k])
-
+    
     def get_reference(self) -> complex:
         """
         returns the reference value of the integration using oneloop_bridge
@@ -167,6 +150,68 @@ class ContextManager:
         assert res.epsilon_minus_2 == 0
 
         return res.epsilon_0 * TO_FEYNMAN
+    
+    def set_external_momenta(self, p12, p22, p32):
+        """
+        Set p1 and p2 in the center-of-momentum frame such that.
+        p1^2 = p12, p2^2 = p22, (p1 + p2)^2 = p32
+        and
+        p1.x = p2.x = p1.y = p2.y = 0
+        """
+    
+        s = p32
+        sqrt_s = np.sqrt(s)
+    
+        # energies in the COM frame
+        E1 = (s + p12 - p22) / (2.0 * sqrt_s)
+        E2 = (s + p22 - p12) / (2.0 * sqrt_s)
+    
+        # common three-momentum magnitude
+        p_abs_sq = E1**2 - p12
+        if p_abs_sq < 0:
+            raise ValueError("Kinematic point is not physically allowed (negative momentum^2).")
+    
+        p_abs = np.sqrt(p_abs_sq)
+    
+        # pick them back-to-back along z
+        self.p1 = np.array([E1, 0.0, 0.0,  p_abs])
+        self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
+    
+    def set_anomalous_configuration(self, p2 =203): # TODO: make this exact
+        s = 350**2 # GeV
+        p12 = 120**2 # GeV
+        top_mass = 172.76 # GeV
+        bottom_mass = 4.18 # GeV
+        self.masses = [top_mass, bottom_mass, top_mass]
+        self.threshold = 500
+        self.origin = np.array([0,0,0,-37.9]) # TODO: make this exact
+        self.set_external_momenta(p12,p2**2,s)
+
+class TriangleIntegrandEvaluator:
+    """
+    provides functions for evaluating and plotting compiled expressions
+    with a triangle integrand context
+    """
+    
+    def __init__(self, evaluator = None, context = None):
+        if evaluator is None:
+            ib = IntegrandBuilder()
+            evaluator = WrappedEvaluator(
+                ib.combined_result(), ib.get_args(), "combined_result", True
+            )
+        self.evaluator = evaluator
+
+        if context is None:
+            context = TriangleIntegrandContext()
+        self.context = context
+
+    def eval(self, k):
+        """
+        evaluates the integrand at k
+        """
+        shape = k.shape[:-1]
+        return self.evaluator.evaluate(self.context.get_args() + [k.reshape(-1, 3)]).reshape(shape)
+
 
     def plot_threshold_subtraction(
         self, x_lim, y_lim, x_axis=None, y_axis=None, res=200
@@ -187,30 +232,27 @@ class ContextManager:
         ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
         ks_line = (x_axis[:, None] * x).T
 
-        ks_plane_jac = np.sum(ks_plane**2, axis=1)
-        ks_line_jac = np.sum(ks_line**2, axis=1)
-
-        self.only_unsubtracted()
+        self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 3, 1)
-        integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+        integrand = (self.eval(ks_plane)).reshape(res, res)
         plot_complex_plane(xs_plane, integrand)
         plt.subplot(2, 3, 4)
-        plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line))
 
-        self.only_counterterm()
+        self.context.only_counterterm()
         plt.subplot(2, 3, 2)
-        counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+        counter_term = (self.eval(ks_plane)).reshape(res, res)
         plot_complex_plane(xs_plane, counter_term)
         plt.subplot(2, 3, 5)
-        plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line))
 
-        self.combined_integrand_without_integrated_counterterm()
+        self.context.combined_integrand_without_integrated_counterterm()
         plt.subplot(2, 3, 3)
-        subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+        subtracted = (self.eval(ks_plane)).reshape(res, res)
         plot_complex_plane(xs_plane, subtracted)
         plt.subplot(2, 3, 6)
-        plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plot_complex(x, self.eval(ks_line))
 
     def plot_planes(self, x_lim, y_lim, res=100):
         """
@@ -228,52 +270,56 @@ class ContextManager:
             X, Y = np.meshgrid(x, y)
             xs_plane = X + Y * 1j
             ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
-            ks_plane_jac = np.sum(ks_plane**2, axis=1)
 
             plt.subplot(1, 3, i + 1)
-            integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
+            integrand = (self.eval(ks_plane)).reshape(res, res)
             plot_complex_plane(xs_plane, integrand)
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
+    
+    def contour(self, x_lim, y_lim, z_lim, res = 100):
+        import pyvista as pv
+        
+        x = np.linspace(x_lim[0], x_lim[1], res)
+        y = np.linspace(y_lim[0], y_lim[1], res)
+        z = np.linspace(z_lim[0], z_lim[1], res)
 
-    def plot_integrated_counterterm(self, res=200):
+        ks = np.stack(np.meshgrid(x, y, z), axis = -1)
+        vals = self.eval(ks)
+        grid = pv.ImageData()
+        grid.dimensions = np.array(vals.shape)
+        grid.origin = (x[0], y[0], z[0])
+        grid.spacing = (x[1] - x[0], y[1] - y[0], z[1] - z[0])
+        grid.point_data["vals"] = vals.flatten(order="F")
+        return grid.contour([0])
+
+    def plot_unit_sphere(self, res=200):
         """
-        plots the integrated counterterm along the unit hemisphere
+        Visualizes the integrand along the unit hemisphere
         """
-        u = np.linspace(0, 1, res)
+        u = np.linspace(-1, 1, res)
         v = np.linspace(0, 1, res)
 
         U, V = np.meshgrid(u, v)
         xs = np.stack([U, V], axis=-1).reshape(-1, 2)
         ks, _ = hemispherical(xs)
-        self.only_integrated_counterterm()
         plot_complex_plane(U + V * 1j, self.eval(ks).reshape(res, res))
         plt.xlabel(r"$\theta/2\pi$")
         plt.ylabel(r"$\cos(\phi)$")
-
-    def set_external_momenta(self, p12, p22, p32):
-        """
-        Set p1 and p2 in the center-of-momentum frame.
-        p1^2 = p12, p2^2 = p22, (p1 + p2)^2 = p32.
-        """
     
-        s = p32
-        sqrt_s = np.sqrt(s)
-    
-        # energies in the COM frame
-        E1 = (s + p12 - p22) / (2.0 * sqrt_s)
-        E2 = (s + p22 - p12) / (2.0 * sqrt_s)
-    
-        # common three-momentum magnitude
-        p_abs_sq = E1**2 - p12
-        if p_abs_sq < 0:
-            raise ValueError("Kinematic point is not physically allowed (negative momentum^2).")
-    
-        p_abs = np.sqrt(p_abs_sq)
-    
-        # pick them back-to-back along z
-        self.p1 = np.array([E1, 0.0, 0.0,  p_abs])
-        self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
+    def plot_contour(self, x_lim, y_lim, z_lim, res, plotter = None):
+        import pyvista as pv
         
+        surf = self.contour(x_lim, y_lim, z_lim, res)
+
+        if plotter is None:
+            plotter = pv.Plotter()
+            
+        plotter.add_mesh(surf, color="cyan", opacity=0.5, smooth_shading=True)
+        return plotter
+
+
+    
+
             
     

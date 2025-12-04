@@ -2,11 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_complex_plane(xs, ys):
+def plot_complex_plane(xs, ys, ax = None):
     """Plot a complex→complex function using HSV color encoding for phase and magnitude.
     xs is a 2D grid (from np.meshgrid) of complex-plane x-values, ys is the complex output.
     NaN or inf values in ys are handled gracefully and shown as transparent.
     """
+
+    if ax is None:
+        ax = plt.gca()
 
     # Mask invalid data
     valid_mask = np.isfinite(ys)

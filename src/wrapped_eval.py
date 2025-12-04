@@ -1,5 +1,5 @@
 from symbolica import Expression, CompiledComplexEvaluator, S, PrintMode, AtomType
-from .symbolica_vectors import *
+from symbolica_vectors import *
 from numpy.typing import NDArray
 import numpy as np
 

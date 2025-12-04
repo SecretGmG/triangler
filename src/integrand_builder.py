@@ -1,6 +1,6 @@
-from .symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
+from symbolica_vectors import SymbolicaLorenzVec, SymbolicaVec
 from symbolica import S, N, Expression
-from .wrapped_eval import THETA
+from wrapped_eval import THETA
 import numpy as np
 
 
