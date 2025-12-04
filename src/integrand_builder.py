@@ -41,6 +41,9 @@ class IntegrandBuilder:
     provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm
     """
 
+    check_singularities = True
+    subtract_only_real_roots = False
+    
     qs: list[SymbolicaLorenzVec] = [
         SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)
     ]
@@ -170,7 +173,12 @@ class IntegrandBuilder:
         for r_star in poles:
             k_star = r_star * self.k_hat
             
-            selector = THETA(N(1e-5)-c_abs(self.eta(i, j, k_star)))
+            selector = N(1)
+            if self.check_singularities:
+                selector *= THETA(N(1e-10)-c_abs(self.eta(i, j, k_star)))
+            
+            if self.subtract_only_real_roots:
+                selector *= THETA(N(1e-10) - c_abs(imag(r_star)))
             
             factor = (
                 self.collect_other_etas(i, j, k_star)
@@ -198,7 +206,7 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
-    def ct(self):
+    def counterterm(self):
         """
         returns the counterterm of the integrand at self.k
         """
@@ -245,7 +253,7 @@ class IntegrandBuilder:
         )
         return (
             self.unsubtracted() * self.a
-            - self.ct() * self.b
+            - self.counterterm() * self.b
             + self.integrated_counterterm() * self.c * integrated_ct_factor
         )
 

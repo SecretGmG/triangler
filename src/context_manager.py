@@ -277,7 +277,7 @@ class TriangleIntegrandEvaluator:
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
     
-    def contour(self, x_lim, y_lim, z_lim, res = 100):
+    def contour(self, x_lim, y_lim, z_lim, res = 100, invert = False):
         import pyvista as pv
         
         x = np.linspace(x_lim[0], x_lim[1], res)
@@ -286,6 +286,8 @@ class TriangleIntegrandEvaluator:
 
         ks = np.stack(np.meshgrid(x, y, z), axis = -1)
         vals = self.eval(ks)
+        if invert:
+            vals = 1/vals
         grid = pv.ImageData()
         grid.dimensions = np.array(vals.shape)
         grid.origin = (x[0], y[0], z[0])
@@ -307,16 +309,27 @@ class TriangleIntegrandEvaluator:
         plt.xlabel(r"$\theta/2\pi$")
         plt.ylabel(r"$\cos(\phi)$")
     
-    def plot_contour(self, x_lim, y_lim, z_lim, res, plotter = None):
+    def plot_contour(self, x_lim, y_lim, z_lim, res, plotter = None, invert = False):
         import pyvista as pv
         
-        surf = self.contour(x_lim, y_lim, z_lim, res)
+        surf = self.contour(x_lim, y_lim, z_lim, res, invert)
 
         if plotter is None:
             plotter = pv.Plotter()
             
         plotter.add_mesh(surf, color="cyan", opacity=0.5, smooth_shading=True)
         return plotter
+
+    def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax = None):
+        if ax is None:
+            ax = plt.gca()
+        x = np.linspace(re_lim[0], re_lim[1], res)
+        y = np.linspace(im_lim[0], im_lim[1], res)
+        X, Y = np.meshgrid(x, y)
+
+        xs = X + 1j*Y
+        val = self.eval(xs[..., None] * k_hat)
+        plot_complex_plane(xs, val, ax)
 
 
     
