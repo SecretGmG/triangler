@@ -232,27 +232,30 @@ class TriangleIntegrandEvaluator:
         ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
         ks_line = (x_axis[:, None] * x).T
 
+        ks_plane_jac = np.sum(ks_plane**2, axis=1)
+        ks_line_jac = np.sum(ks_line**2, axis=1)
+
         self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 3, 1)
-        integrand = (self.eval(ks_plane)).reshape(res, res)
+        integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, integrand)
         plt.subplot(2, 3, 4)
-        plot_complex(x, self.eval(ks_line))
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
 
         self.context.only_counterterm()
         plt.subplot(2, 3, 2)
-        counter_term = (self.eval(ks_plane)).reshape(res, res)
+        counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, counter_term)
         plt.subplot(2, 3, 5)
-        plot_complex(x, self.eval(ks_line))
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
 
         self.context.combined_integrand_without_integrated_counterterm()
         plt.subplot(2, 3, 3)
-        subtracted = (self.eval(ks_plane)).reshape(res, res)
+        subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, subtracted)
         plt.subplot(2, 3, 6)
-        plot_complex(x, self.eval(ks_line))
+        plot_complex(x, self.eval(ks_line) * ks_line_jac)
 
     def plot_planes(self, x_lim, y_lim, res=100):
         """

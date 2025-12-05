@@ -95,7 +95,7 @@ class IntegrandBuilder:
         """
         returns  the onshell energy of particle i
         """
-        temp: Expression = k - self.qs[i].spacial()
+        temp: Expression = k - self.qs[i].spatial()
         return sqrt(temp.squared() + self.masses[i] ** N(2))
 
     def prefactor(self, k: SymbolicaVec):
@@ -111,6 +111,18 @@ class IntegrandBuilder:
         returns the e-surface (i,j) value at k
         """
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
+    
+    def k_p_min(self, i, j):
+        return 
+    
+    def eta_min(self, i, j):
+        q : SymbolicaLorenzVec = (self.qs[i] - self.qs[j])*HALF
+        #q_min = (m[j]-m[i])/(m[i]+m[j]) * q
+        #min_val = np.sqrt(np.linalg.norm(q_min-q) + m[i]**2) + np.sqrt(np.linalg.norm(q_min+q) + m[j]**2) + 2*q[0]
+        
+        (self.masses[j]-self.masses[i])/(self.masses[i]+self.masses[j]) * q.spatial()
+        return sqrt(())
+        
 
     def unsubtracted(self):
         """
@@ -126,8 +138,8 @@ class IntegrandBuilder:
         returns the location of the roots of the e-surface (i,j) when parameterized hemispherically with the direction vector self.k_hat
         """
         q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
-        v: SymbolicaVec = q.spacial() * (N(1) / q.t())
-        k_0_p = -(self.qs[i] + self.qs[j]).spacial() * HALF
+        v: SymbolicaVec = q.spatial() * (N(1) / q.t())
+        k_0_p = -(self.qs[i] + self.qs[j]).spatial() * HALF
 
         k_hat_v = self.k_hat * v
         delta = (self.masses[i] ** N(2) - self.masses[j] ** N(2)) / (N(4) * q.t())
@@ -148,7 +160,6 @@ class IntegrandBuilder:
 
         d = b ** N(2) - N(4) * a * c
         
-        
         return [
             (-b + sqrt(d)) / (N(2) * a) + I_EPS, # necessary for the log to select the correct branch
             (-b - sqrt(d)) / (N(2) * a) - I_EPS, # necessary for the log to select the correct branch
@@ -158,8 +169,8 @@ class IntegrandBuilder:
         """
         returns the partial derivative of the e-surface (i,j) with respect to k along the direction k_hat
         """
-        d1 = self.k_hat * (k - self.qs[i].spacial()) / self.ose(i, k)
-        d2 = self.k_hat * (k - self.qs[j].spacial()) / self.ose(j, k)
+        d1 = self.k_hat * (k - self.qs[i].spatial()) / self.ose(i, k)
+        d2 = self.k_hat * (k - self.qs[j].spatial()) / self.ose(j, k)
         return d1 + d2
 
     def eta_ct(self, i, j) -> list[(Expression, SymbolicaVec)]:

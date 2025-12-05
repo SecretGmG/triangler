@@ -14,7 +14,7 @@ class SymbolicaLorenzVec:
     def t(self):
         return self.values[0]
 
-    def spacial(self):
+    def spatial(self):
         return SymbolicaVec(self.values[1:])
     
     def normalized(self):
@@ -43,7 +43,7 @@ class SymbolicaLorenzVec:
 
     def __mul__(self, other):
         if isinstance(other, SymbolicaLorenzVec):
-            return self.values[0]*other.values[0]-self.spacial()*other.spacial()
+            return self.values[0]*other.values[0]-self.spatial()*other.spatial()
         return SymbolicaLorenzVec([a*other for a in self.values])
     def __rmul__(self, other):
         return self * other
