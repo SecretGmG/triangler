@@ -8,6 +8,7 @@ HALF = N(1) / 2
 EPS = N(np.finfo(np.float64).eps)
 I_EPS = Expression.I * EPS
 
+
 def sqrt(e: Expression):
     """
     returns e**HALF
@@ -43,7 +44,8 @@ class IntegrandBuilder:
 
     check_singularities = True
     subtract_only_real_roots = False
-    
+    subtract_only_existing_surfaces = True
+
     qs: list[SymbolicaLorenzVec] = [
         SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)
     ]
@@ -111,18 +113,9 @@ class IntegrandBuilder:
         returns the e-surface (i,j) value at k
         """
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
-    
+
     def k_p_min(self, i, j):
-        return 
-    
-    def eta_min(self, i, j):
-        q : SymbolicaLorenzVec = (self.qs[i] - self.qs[j])*HALF
-        #q_min = (m[j]-m[i])/(m[i]+m[j]) * q
-        #min_val = np.sqrt(np.linalg.norm(q_min-q) + m[i]**2) + np.sqrt(np.linalg.norm(q_min+q) + m[j]**2) + 2*q[0]
-        
-        (self.masses[j]-self.masses[i])/(self.masses[i]+self.masses[j]) * q.spatial()
-        return sqrt(())
-        
+        return
 
     def unsubtracted(self):
         """
@@ -159,10 +152,12 @@ class IntegrandBuilder:
         )
 
         d = b ** N(2) - N(4) * a * c
-        
+
         return [
-            (-b + sqrt(d)) / (N(2) * a) + I_EPS, # necessary for the log to select the correct branch
-            (-b - sqrt(d)) / (N(2) * a) - I_EPS, # necessary for the log to select the correct branch
+            (-b + sqrt(d)) / (N(2) * a)
+            + I_EPS,  # necessary for the log to select the correct branch
+            (-b - sqrt(d)) / (N(2) * a)
+            - I_EPS,  # necessary for the log to select the correct branch
         ]
 
     def ddk_eta(self, i, j, k):
@@ -172,6 +167,19 @@ class IntegrandBuilder:
         d1 = self.k_hat * (k - self.qs[i].spatial()) / self.ose(i, k)
         d2 = self.k_hat * (k - self.qs[j].spatial()) / self.ose(j, k)
         return d1 + d2
+
+    def eta_min(self, i, j):
+        q: SymbolicaLorenzVec = (self.qs[i] - self.qs[j]) * HALF
+        q_min = (
+            (self.masses[j] - self.masses[i])
+            / (self.masses[i] + self.masses[j])
+            * q.spatial()
+        )
+        return (
+            sqrt((q_min-q.spatial()).squared() + self.masses[i] ** N(2))
+            + sqrt((q_min+q.spatial()).squared() + self.masses[j] ** N(2))
+            + N(2) * q.t()
+        )
 
     def eta_ct(self, i, j) -> list[(Expression, SymbolicaVec)]:
         """
@@ -183,14 +191,17 @@ class IntegrandBuilder:
 
         for r_star in poles:
             k_star = r_star * self.k_hat
-            
+
             selector = N(1)
             if self.check_singularities:
-                selector *= THETA(N(1e-10)-c_abs(self.eta(i, j, k_star)))
-            
+                selector *= THETA(N(1e-10) - c_abs(self.eta(i, j, k_star)))
+
             if self.subtract_only_real_roots:
                 selector *= THETA(N(1e-10) - c_abs(imag(r_star)))
-            
+
+            if self.subtract_only_existing_surfaces:
+                selector *= THETA(-self.eta_min(i, j))
+
             factor = (
                 self.collect_other_etas(i, j, k_star)
                 * selector
@@ -225,7 +236,7 @@ class IntegrandBuilder:
         for i, j in self.eta_indices:
             values = self.eta_ct(i, j)
             for factor, r_star in values:
-                selector = THETA(self.thresh-self.r)
+                selector = THETA(self.thresh - self.r)
                 ct += (
                     selector
                     * factor
@@ -260,12 +271,10 @@ class IntegrandBuilder:
         integrating this over R^3 gives the result of the integral
         """
         integrated_ct_factor = THETA(self.thresh - self.r) / (
-            N(2) / N(3) * (self.thresh**N(3))
+            N(2) / N(3) * (self.thresh ** N(3))
         )
         return (
             self.unsubtracted() * self.a
             - self.counterterm() * self.b
             + self.integrated_counterterm() * self.c * integrated_ct_factor
         )
-
-
