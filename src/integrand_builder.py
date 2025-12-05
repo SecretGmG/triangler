@@ -240,7 +240,7 @@ class IntegrandBuilder:
                 ct += (
                     selector
                     * factor
-                    * (real(r_star) / self.r) ** N(2)
+                    * (r_star / self.r) ** N(2)
                     / (self.r - r_star)
                 )
         return ct
