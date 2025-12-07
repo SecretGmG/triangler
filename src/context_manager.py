@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from integrand_builder import IntegrandBuilder
-from plot_util import plot_complex, plot_complex_plane
+from plot_util import plot_complex, plot_complex_plane, get_contour
 from wrapped_eval import WrappedEvaluator
 
 def norm(v):
@@ -109,7 +109,6 @@ class TriangleIntegrandContext:
     def get_qs(self):
         """
         returns the qs arguments of the integrand as a list
-        ordered such that q0_0 < q1_0 < q2_0
         """
         qs = [
             self.origin + self.p1,
@@ -119,12 +118,14 @@ class TriangleIntegrandContext:
         
         return qs
     
+    def get_ordered_qs_and_masses(self):
+        return zip(*sorted(zip(self.get_qs(),self.masses), key=lambda q: q[0][0]))
+    
     def get_args(self):
         """
         returns the arguments of the integrand as a list except for the k argument
         """
-        
-        ordered_qs, ordered_masses = zip(*sorted(zip(self.get_qs(),self.masses), key=lambda q: q[0][0]))
+        ordered_qs, ordered_masses = self.get_ordered_qs_and_masses()
         
         return (
             [np.pi, self.threshold, self.a, self.b, self.c]
@@ -214,23 +215,25 @@ class TriangleIntegrandEvaluator:
 
 
     def plot_threshold_subtraction(
-        self, x_lim, y_lim, x_axis=None, y_axis=None, res=200
+        self, x_lim, y_lim, x_axis: int=0, y_axis: int=1, res=200
     ):
         """
         Visualizes the threshold subtraction procedure
         """
-        if x_axis is None:
-            x_axis = np.array([1, 0, 0])
-        if y_axis is None:
-            y_axis = np.array([0, 1, 0])
+        axis_labels = ["x", "y", "z"]
+        
+        x_dir = np.zeros(3)
+        y_dir = np.zeros(3)
+        x_dir[x_axis] = 1
+        y_dir[y_axis] = 1
 
         x = np.linspace(x_lim[0], x_lim[1], res)
         y = np.linspace(y_lim[0], y_lim[1], res)
         X, Y = np.meshgrid(x, y)
 
         xs_plane = X + Y * 1j
-        ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
-        ks_line = (x_axis[:, None] * x).T
+        ks_plane = (X[..., None] * x_dir + Y[..., None] * y_dir).reshape(-1, 3)
+        ks_line = (x_dir[:, None] * x).T
 
         ks_plane_jac = np.sum(ks_plane**2, axis=1)
         ks_line_jac = np.sum(ks_line**2, axis=1)
@@ -238,24 +241,39 @@ class TriangleIntegrandEvaluator:
         self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 3, 1)
+        plt.title('Unsubtracted integrand')
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, integrand)
+        plot_complex_plane(xs_plane, integrand, cmap_factor=20)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel('Integrand')
 
         self.context.only_counterterm()
         plt.subplot(2, 3, 2)
+        plt.title('Counterterm')
         counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, counter_term)
+        plot_complex_plane(xs_plane, counter_term, cmap_factor=20)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 5)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel('Integrand')
 
         self.context.combined_integrand_without_integrated_counterterm()
         plt.subplot(2, 3, 3)
+        plt.title('Subtracted integrand')
         subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, subtracted)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 6)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.xlabel(axis_labels[x_axis])
+        plt.ylabel('Integrand')
 
     def plot_planes(self, x_lim, y_lim, res=100):
         """
@@ -280,24 +298,6 @@ class TriangleIntegrandEvaluator:
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
     
-    def contour(self, x_lim, y_lim, z_lim, res = 100, invert = False):
-        import pyvista as pv
-        
-        x = np.linspace(x_lim[0], x_lim[1], res)
-        y = np.linspace(y_lim[0], y_lim[1], res)
-        z = np.linspace(z_lim[0], z_lim[1], res)
-
-        ks = np.stack(np.meshgrid(x, y, z), axis = -1)
-        vals = self.eval(ks)
-        if invert:
-            vals = 1/vals
-        grid = pv.ImageData()
-        grid.dimensions = np.array(vals.shape)
-        grid.origin = (x[0], y[0], z[0])
-        grid.spacing = (x[1] - x[0], y[1] - y[0], z[1] - z[0])
-        grid.point_data["vals"] = vals.flatten(order="F")
-        return grid.contour([0])
-
     def plot_unit_sphere(self, res=200):
         """
         Visualizes the integrand along the unit hemisphere
@@ -315,12 +315,13 @@ class TriangleIntegrandEvaluator:
     def plot_contour(self, x_lim, y_lim, z_lim, res, plotter = None, invert = False):
         import pyvista as pv
         
-        surf = self.contour(x_lim, y_lim, z_lim, res, invert)
-
         if plotter is None:
             plotter = pv.Plotter()
-            
-        plotter.add_mesh(surf, color="cyan", opacity=0.5, smooth_shading=True)
+        
+        contour =  get_contour(x_lim, y_lim, z_lim, lambda xs: 1/self.eval(xs) if invert else self.eval(xs))
+
+        
+        plotter.add_mesh(contour, color="cyan", opacity=0.5, smooth_shading=True)
         return plotter
 
     def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax = None):

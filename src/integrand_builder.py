@@ -42,7 +42,7 @@ class IntegrandBuilder:
     provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm
     """
 
-    check_singularities = True
+    check_singularities = False
     subtract_only_real_roots = False
     subtract_only_existing_surfaces = True
 

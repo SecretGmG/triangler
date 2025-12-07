@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_complex_plane(xs, ys, ax = None):
+def plot_complex_plane(xs, ys, ax = None, cmap_factor = 1):
     """Plot a complex→complex function using HSV color encoding for phase and magnitude.
     xs is a 2D grid (from np.meshgrid) of complex-plane x-values, ys is the complex output.
     NaN or inf values in ys are handled gracefully and shown as transparent.
@@ -18,13 +18,14 @@ def plot_complex_plane(xs, ys, ax = None):
 
     # Compute phase and magnitude safely
     phase = np.angle(np.where(valid_mask, ys, 0))
-    mag = np.abs(np.where(valid_mask, ys, 0))
-    max_mag = np.nanmax(mag)
-    mag = mag / max_mag if max_mag != 0 else mag
 
     # HSV mapping
     hue = (phase + np.pi) / (2 * np.pi)
-    value = mag
+    value = np.abs(np.where(valid_mask, ys, 0))
+    
+    value = value / value.max()
+    value = np.log(cmap_factor*value+1)
+    value = value / value.max()
 
     # HSV → RGB
     rgb = plt.cm.hsv(hue)
@@ -58,4 +59,17 @@ def plot_complex(xs, ys):
     plt.plot(xs, ys.imag, label="im")
 
 
+def get_contour(x_lim, y_lim, z_lim, f, res = 100):
+    import pyvista as pv
+    x = np.linspace(x_lim[0], x_lim[1], res)
+    y = np.linspace(y_lim[0], y_lim[1], res)
+    z = np.linspace(z_lim[0], z_lim[1], res)
+    xs = np.stack(np.meshgrid(x, y, z), axis = -1)
+    vals = f(xs)
+    grid = pv.ImageData()
+    grid.dimensions = np.array(vals.shape)
+    grid.origin = (x[0], y[0], z[0])
+    grid.spacing = (x[1] - x[0], y[1] - y[0], z[1] - z[0])
+    grid.point_data["vals"] = vals.flatten(order="F")
+    return grid.contour([0])
 

@@ -107,12 +107,12 @@ class ComplexIntegratorResult:
     def nr_iters(self):
         return self.iters
 
-    def convergence(self):
+    def cv(self):
         return self.relative_abs_err() * np.sqrt(self.nr_iters())
 
     def __repr__(self):
         rae = self.relative_abs_err() * 100
-        conv = self.convergence()
+        conv = self.cv()
         iters = self.nr_iters()
 
         return (
