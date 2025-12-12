@@ -6,6 +6,9 @@ from plot_util import plot_complex, plot_complex_plane, get_contour
 from wrapped_eval import WrappedEvaluator
 
 def norm(v):
+    """
+    computes the minkowski norm
+    """
     return v[0] ** 2 - (v[1:] ** 2).sum()
 
 
@@ -68,15 +71,21 @@ def line_segment(k_hat, thresh):
 class TriangleIntegrandContext:
     """
     Manages the context of the triangle integrand
-    provides functions for setting up the integrand
+    provides functions for setting up the parameters,
+    evaluating and plotting the integrand
     """
     
     origin = np.array([0,0,0,0])
-    
+
     p1 = np.array([2, 1, 0, 0])
     p2 = np.array([2, -1, 0, 0])
-    masses = [1, 1, -0.01j, 1 - 0.1j]
+
+    masses = [1, 1, 1]
     threshold = 5
+    
+    max_imag_root_part = 1e15
+    max_eta_min = 0
+    
     a = 1
     b = 1
     c = 1
@@ -119,6 +128,10 @@ class TriangleIntegrandContext:
         return qs
     
     def get_ordered_qs_and_masses(self):
+        """
+        returns masses and qs ordered by q0
+        """
+        
         return zip(*sorted(zip(self.get_qs(),self.masses), key=lambda q: q[0][0]))
     
     def get_args(self):
@@ -128,7 +141,7 @@ class TriangleIntegrandContext:
         ordered_qs, ordered_masses = self.get_ordered_qs_and_masses()
         
         return (
-            [np.pi, self.threshold, self.a, self.b, self.c]
+            [np.pi, self.threshold, self.a, self.b, self.c, self.max_imag_root_part, self.max_eta_min]
             + list(ordered_masses)
             + list(ordered_qs)
         )
@@ -184,7 +197,6 @@ class TriangleIntegrandContext:
         top_mass = 172.76 # GeV
         bottom_mass = 4.18 # GeV
         self.masses = [top_mass, bottom_mass, top_mass]
-        self.threshold = 500
         self.origin = np.array([0,0,0,-37.9]) # TODO: make this exact
         self.set_external_momenta(p12,p2**2,s)
 
@@ -275,7 +287,7 @@ class TriangleIntegrandEvaluator:
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel('Integrand')
 
-    def plot_planes(self, x_lim, y_lim, res=100):
+    def plot_planes(self, x_lim, y_lim, res=300, divide_jacobian=False):
         """
         Visualizes the integrand in the three planes
         """
@@ -290,10 +302,12 @@ class TriangleIntegrandEvaluator:
             y = np.linspace(y_lim[0], y_lim[1], res)
             X, Y = np.meshgrid(x, y)
             xs_plane = X + Y * 1j
-            ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis).reshape(-1, 3)
+            ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis)
 
             plt.subplot(1, 3, i + 1)
-            integrand = (self.eval(ks_plane)).reshape(res, res)
+            integrand = self.eval(ks_plane)
+            if divide_jacobian:
+                integrand *= np.sum(ks_plane**2, axis = -1)
             plot_complex_plane(xs_plane, integrand)
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
@@ -311,18 +325,6 @@ class TriangleIntegrandEvaluator:
         plot_complex_plane(U + V * 1j, self.eval(ks).reshape(res, res))
         plt.xlabel(r"$\theta/2\pi$")
         plt.ylabel(r"$\cos(\phi)$")
-    
-    def plot_contour(self, x_lim, y_lim, z_lim, res, plotter = None, invert = False):
-        import pyvista as pv
-        
-        if plotter is None:
-            plotter = pv.Plotter()
-        
-        contour =  get_contour(x_lim, y_lim, z_lim, lambda xs: 1/self.eval(xs) if invert else self.eval(xs))
-
-        
-        plotter.add_mesh(contour, color="cyan", opacity=0.5, smooth_shading=True)
-        return plotter
 
     def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax = None):
         if ax is None:

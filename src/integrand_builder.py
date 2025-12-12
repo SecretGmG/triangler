@@ -4,7 +4,7 @@ from wrapped_eval import THETA
 import numpy as np
 
 
-HALF = N(1) / 2
+HALF = N(1) / N(2)
 EPS = N(np.finfo(np.float64).eps)
 I_EPS = Expression.I * EPS
 
@@ -42,22 +42,31 @@ class IntegrandBuilder:
     provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm
     """
 
-    check_singularities = False
-    subtract_only_real_roots = False
-    subtract_only_existing_surfaces = True
+    check_singularities_per_sample = False
 
+    # True: subtract sphere centered at origin, False: subtract sliver at e-surface
+    center_counterterm_region_at_origin = True
+
+    # kinematics
     qs: list[SymbolicaLorenzVec] = [
         SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)
     ]
     k: SymbolicaVec = SymbolicaVec.from_name("k")
-    r = k.squared() ** HALF
-    k_hat: SymbolicaVec = k.normalized()
     masses = [S(f"m{i}") for i in range(3)]
-    thresh: Expression = S("lambda")
 
+    # control parameters for the combined integrand
     a = S("a")
     b = S("b")
     c = S("c")
+
+    # hyperparameters
+    thresh: Expression = S("lambda")
+    max_imag_root = S("max_imag_root_part")
+    max_eta_min = S("max_eta_min")
+
+    # commonly used shorthands
+    r = k.squared() ** HALF
+    k_hat: SymbolicaVec = k.normalized()
 
     # indices for the counterterm
     # this only works by assuming that q0_0 < q1_0 < q2_0
@@ -87,7 +96,15 @@ class IntegrandBuilder:
          - k is the argument of the integrand (3-momentum)
         """
         return (
-            [Expression.PI, self.thresh, self.a, self.b, self.c]
+            [
+                Expression.PI,
+                self.thresh,
+                self.a,
+                self.b,
+                self.c,
+                self.max_imag_root,
+                self.max_eta_min,
+            ]
             + self.masses
             + self.qs
             + [self.k]
@@ -113,9 +130,6 @@ class IntegrandBuilder:
         returns the e-surface (i,j) value at k
         """
         return self.ose(i, k) + self.ose(j, k) + self.qs[i].t() - self.qs[j].t()
-
-    def k_p_min(self, i, j):
-        return
 
     def unsubtracted(self):
         """
@@ -149,15 +163,13 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        )
+        ) - I_EPS
 
         d = b ** N(2) - N(4) * a * c
 
         return [
-            (-b + sqrt(d)) / (N(2) * a)
-            + I_EPS,  # necessary for the log to select the correct branch
+            (-b + sqrt(d)) / (N(2) * a),
             (-b - sqrt(d)) / (N(2) * a)
-            - I_EPS,  # necessary for the log to select the correct branch
         ]
 
     def ddk_eta(self, i, j, k):
@@ -176,12 +188,12 @@ class IntegrandBuilder:
             * q.spatial()
         )
         return (
-            sqrt((q_min-q.spatial()).squared() + self.masses[i] ** N(2))
-            + sqrt((q_min+q.spatial()).squared() + self.masses[j] ** N(2))
+            sqrt((q_min - q.spatial()).squared() + self.masses[i] ** N(2))
+            + sqrt((q_min + q.spatial()).squared() + self.masses[j] ** N(2))
             + N(2) * q.t()
         )
 
-    def eta_ct(self, i, j) -> list[(Expression, SymbolicaVec)]:
+    def eta_counterterm(self, i, j) -> list[(Expression, SymbolicaVec)]:
         """
         returns the counterterm for the e-surface (i,j) when parameterized around the origin
         """
@@ -193,14 +205,12 @@ class IntegrandBuilder:
             k_star = r_star * self.k_hat
 
             selector = N(1)
-            if self.check_singularities:
-                selector *= THETA(N(1e-10) - c_abs(self.eta(i, j, k_star)))
+            if self.check_singularities_per_sample:
+                selector *= THETA(N(1e-15) - c_abs(self.eta(i, j, k_star)))
 
-            if self.subtract_only_real_roots:
-                selector *= THETA(N(1e-10) - c_abs(imag(r_star)))
+            selector *= THETA(self.max_imag_root - c_abs(imag(r_star)))
 
-            if self.subtract_only_existing_surfaces:
-                selector *= THETA(-self.eta_min(i, j))
+            selector *= THETA(self.max_eta_min - self.eta_min(i, j))
 
             factor = (
                 self.collect_other_etas(i, j, k_star)
@@ -228,19 +238,21 @@ class IntegrandBuilder:
             other_etas += 1 / (self.eta(i, j, k))
         return other_etas
 
-    def counterterm(self):
+    def combined_counterterms(self):
         """
         returns the counterterm of the integrand at self.k
         """
         ct = N(0)
         for i, j in self.eta_indices:
-            values = self.eta_ct(i, j)
-            for factor, r_star in values:
-                selector = THETA(self.thresh - self.r)
+            for factor, r_star in self.eta_counterterm(i, j):
+                if self.center_counterterm_region_at_origin:
+                    selector = THETA(self.thresh - self.r)
+                else:
+                    selector = THETA(self.thresh - c_abs(self.r - real(r_star)))
                 ct += (
                     selector
                     * factor
-                    * (r_star / self.r) ** N(2)
+                    * (real(r_star) / self.r) ** N(2)
                     / (self.r - r_star)
                 )
         return ct
@@ -251,30 +263,39 @@ class IntegrandBuilder:
         """
         ct = N(0)
         for i, j in self.eta_indices:
-            values = self.eta_ct(i, j)
+            values = self.eta_counterterm(i, j)
             for factor, r_star in values:
 
-                upper = self.thresh
-                lower = -self.thresh
+                if self.center_counterterm_region_at_origin:
+                    mask = THETA(self.thresh - self.r) / (
+                        N(2) / N(3) * self.thresh ** N(3)
+                    )
+                    integrated = Expression.LOG((self.thresh - r_star)/(
+                        -self.thresh - r_star
+                    ))
+                else:
+                    real_r_star = real(r_star)
+                    upper = real_r_star + self.thresh
+                    lower = real_r_star - self.thresh
+                    mask = THETA(self.thresh - c_abs(self.r - real_r_star)) / (
+                        N(1) / N(3) * c_abs((upper ** N(3) - lower ** N(3)))
+                    )
+                    integrated = Expression.LOG(
+                        (upper - r_star)/(lower - r_star)
+                    )
 
-                integrated = Expression.LOG((upper - r_star) / (lower - r_star))
-
-                ct += factor * real(r_star) ** N(2) * integrated
+                ct += factor * real(r_star) ** N(2) * integrated * mask
         return ct
 
     def combined_result(self):
         """
         returns the combined result
-            a * unsubtracted() - b * ct() + c * integrated_counterterm() * factor
-            where factor = THETA(thresh - r) / (2/3 * thresh**3)
+            a * unsubtracted() - b * ct() + c * integrated_counterterm()
 
         integrating this over R^3 gives the result of the integral
         """
-        integrated_ct_factor = THETA(self.thresh - self.r) / (
-            N(2) / N(3) * (self.thresh ** N(3))
-        )
         return (
             self.unsubtracted() * self.a
-            - self.counterterm() * self.b
-            + self.integrated_counterterm() * self.c * integrated_ct_factor
+            - self.combined_counterterms() * self.b
+            + self.integrated_counterterm() * self.c
         )
