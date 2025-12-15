@@ -27,11 +27,15 @@ class ComplexIntegrator:
         n_epochs: int = 100,
         samples_per_epoch: int = 1_000,
         rng = None,
-        learning_weight = 1.5
+        learning_weight = 1.5,
+        weighter = None
     ):
         if rng is None:
             rng=symbolica.RandomNumberGenerator(0, 0)
 
+        if weighter is None:
+            weighter = np.abs
+        
         for _ in range(n_epochs):
             samples = self.sampler.sample(
                 samples_per_epoch, rng
@@ -49,17 +53,17 @@ class ComplexIntegrator:
             
             self.real_integral.add_training_samples(samples, values.real)
             self.imag_integral.add_training_samples(samples, values.imag)
-            self.sampler.add_training_samples(samples, np.abs(values))
+            self.sampler.add_training_samples(samples, weighter(values))
 
             self.sampler.update(0, learning_weight)
         
-        return ComplexIntegratorResult.from_live_estimates(
+        return ComplexIntegrationResult.from_live_estimates(
             real_live_estimate=self.real_integral.get_live_estimate(),
             imag_live_estimate=self.imag_integral.get_live_estimate(),
         )
 
 
-class ComplexIntegratorResult:
+class ComplexIntegrationResult:
     """
     represents the result of a complex monte carlo integration
     keeps track of the real and imaginary values and errors, and the total number of iterations
@@ -72,7 +76,7 @@ class ComplexIntegratorResult:
     iters = 0
 
 
-class ComplexIntegratorResult:
+class ComplexIntegrationResult:
     def __init__(self, real_avg, imag_avg, real_err, imag_err, iters):
         self.real_avg = real_avg
         self.imag_avg = imag_avg
@@ -87,7 +91,7 @@ class ComplexIntegratorResult:
 
         iters = real_live_estimate[5]
 
-        return ComplexIntegratorResult(
+        return ComplexIntegrationResult(
             real_avg=real_avg,
             imag_avg=imag_avg,
             real_err=real_err,
@@ -122,7 +126,7 @@ class ComplexIntegratorResult:
         )
 
     def __add__(self, other):
-        if not isinstance(other, ComplexIntegratorResult):
+        if not isinstance(other, ComplexIntegrationResult):
             return NotImplemented
 
         real_avg = self.real_avg + other.real_avg
@@ -133,7 +137,7 @@ class ComplexIntegratorResult:
 
         iters = self.iters + other.iters
 
-        return ComplexIntegratorResult(
+        return ComplexIntegrationResult(
             real_avg=real_avg,
             imag_avg=imag_avg,
             real_err=real_err,
@@ -141,7 +145,7 @@ class ComplexIntegratorResult:
             iters=iters,
         )
     def __sub__(self, other):
-        if not isinstance(other, ComplexIntegratorResult):
+        if not isinstance(other, ComplexIntegrationResult):
             return NotImplemented
 
         real_avg = self.real_avg - other.real_avg
@@ -152,7 +156,7 @@ class ComplexIntegratorResult:
 
         iters = self.iters + other.iters
 
-        return ComplexIntegratorResult(
+        return ComplexIntegrationResult(
             real_avg=real_avg,
             imag_avg=imag_avg,
             real_err=real_err,

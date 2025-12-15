@@ -81,10 +81,11 @@ class TriangleIntegrandContext:
     p2 = np.array([2, -1, 0, 0])
 
     masses = [1, 1, 1]
-    threshold = 5
     
+    threshold = 5
     max_imag_root_part = 1e15
     max_eta_min = 0
+    mask_width = 5
     
     a = 1
     b = 1
@@ -141,7 +142,7 @@ class TriangleIntegrandContext:
         ordered_qs, ordered_masses = self.get_ordered_qs_and_masses()
         
         return (
-            [np.pi, self.threshold, self.a, self.b, self.c, self.max_imag_root_part, self.max_eta_min]
+            [np.pi, self.threshold, self.a, self.b, self.c, self.max_imag_root_part, self.max_eta_min, self.mask_width]
             + list(ordered_masses)
             + list(ordered_qs)
         )
@@ -255,7 +256,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 1)
         plt.title('Unsubtracted integrand')
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, integrand, cmap_factor=20)
+        plot_complex_plane(xs_plane, integrand)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)

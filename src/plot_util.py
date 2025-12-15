@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from integrator import ComplexIntegrationResult
 
-def plot_complex_plane(xs, ys, ax = None, cmap_factor = 1):
+
+def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
     """Plot a complex→complex function using HSV color encoding for phase and magnitude.
     xs is a 2D grid (from np.meshgrid) of complex-plane x-values, ys is the complex output.
     NaN or inf values in ys are handled gracefully and shown as transparent.
@@ -22,9 +24,9 @@ def plot_complex_plane(xs, ys, ax = None, cmap_factor = 1):
     # HSV mapping
     hue = (phase + np.pi) / (2 * np.pi)
     value = np.abs(np.where(valid_mask, ys, 0))
-    
+
     value = value / value.max()
-    value = np.log(cmap_factor*value+1)
+    value = np.log(cmap_factor * value + 1)
     value = value / value.max()
 
     # HSV → RGB
@@ -59,12 +61,13 @@ def plot_complex(xs, ys):
     plt.plot(xs, ys.imag, label="im")
 
 
-def get_contour(x_lim, y_lim, z_lim, f, res = 100):
+def get_contour(x_lim, y_lim, z_lim, f, res=100):
     import pyvista as pv
+
     x = np.linspace(x_lim[0], x_lim[1], res)
     y = np.linspace(y_lim[0], y_lim[1], res)
     z = np.linspace(z_lim[0], z_lim[1], res)
-    xs = np.stack(np.meshgrid(x, y, z), axis = -1)
+    xs = np.stack(np.meshgrid(x, y, z), axis=-1)
     vals = f(xs)
     grid = pv.ImageData()
     grid.dimensions = np.array(vals.shape)
@@ -73,3 +76,65 @@ def get_contour(x_lim, y_lim, z_lim, f, res = 100):
     grid.point_data["vals"] = vals.flatten(order="F")
     return grid.contour([0])
 
+
+def plot_complex_integration_with_ref(
+    res: list[ComplexIntegrationResult],
+    ref_same_x: np.typing.ArrayLike,
+    x_values,
+    ref: np.typing.ArrayLike,
+    ref_x_values
+):
+    real_avg = np.array([r.real_avg for r in res])
+    real_err = np.array([r.real_err for r in res])
+    imag_avg = np.array([r.imag_avg for r in res])
+    imag_err = np.array([r.imag_err for r in res])
+
+    fig, axs = plt.subplots(
+        4, 1,
+        sharex=True,
+        figsize=(10, 10),
+        constrained_layout=True
+    )
+
+    # --- Real part ---
+    axs[0].plot(ref_x_values, ref.real, label="Reference (real)", c = 'k')
+    axs[0].errorbar(
+        x_values,
+        real_avg,
+        real_err,
+        fmt="o",
+        capsize=3,
+        label="Measurement"
+    )
+    axs[0].set_ylabel("Re(value)")
+    axs[0].legend()
+
+    # --- Real pull ---
+    axs[1].scatter(
+        x_values,
+        (real_avg - ref_same_x.real) / real_err
+    )
+    axs[1].axhline(0, lw=1, c="k")
+    axs[1].set_ylabel("Pull (real)")
+
+    # --- Imaginary part ---
+    axs[2].plot(ref_x_values, ref.imag, label="Reference (imag)", c = 'k')
+    axs[2].errorbar(
+        x_values,
+        imag_avg,
+        imag_err,
+        fmt="o",
+        capsize=3,
+        label="Measurement"
+    )
+    axs[2].set_ylabel("Im(value)")
+    axs[2].legend()
+
+    # --- Imaginary pull ---
+    axs[3].scatter(
+        x_values,
+        (imag_avg - ref_same_x.imag) / imag_err
+    )
+    axs[3].axhline(0, lw=1, color="k")
+    axs[3].set_ylabel("Pull (imag)")
+    return fig

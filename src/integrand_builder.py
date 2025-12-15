@@ -42,10 +42,11 @@ class IntegrandBuilder:
     provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm
     """
 
+    # Build options
     check_singularities_per_sample = False
-
     # True: subtract sphere centered at origin, False: subtract sliver at e-surface
     center_counterterm_region_at_origin = True
+    smooth_mask = False
 
     # kinematics
     qs: list[SymbolicaLorenzVec] = [
@@ -63,6 +64,7 @@ class IntegrandBuilder:
     thresh: Expression = S("lambda")
     max_imag_root = S("max_imag_root_part")
     max_eta_min = S("max_eta_min")
+    mask_width = S("mask_width")
 
     # commonly used shorthands
     r = k.squared() ** HALF
@@ -104,6 +106,7 @@ class IntegrandBuilder:
                 self.c,
                 self.max_imag_root,
                 self.max_eta_min,
+                self.mask_width,
             ]
             + self.masses
             + self.qs
@@ -163,13 +166,13 @@ class IntegrandBuilder:
             - q.squared()
             + m_2_avg
             - delta**2
-        ) - I_EPS
+        )
 
         d = b ** N(2) - N(4) * a * c
 
         return [
-            (-b + sqrt(d)) / (N(2) * a),
-            (-b - sqrt(d)) / (N(2) * a)
+            (-b + sqrt(d)) / (N(2) * a) + I_EPS,
+            (-b - sqrt(d)) / (N(2) * a) - I_EPS,
         ]
 
     def ddk_eta(self, i, j, k):
@@ -206,10 +209,9 @@ class IntegrandBuilder:
 
             selector = N(1)
             if self.check_singularities_per_sample:
-                selector *= THETA(N(1e-15) - c_abs(self.eta(i, j, k_star)))
+                selector *= THETA(N(1e-10) - c_abs(self.eta(i, j, k_star)))
 
             selector *= THETA(self.max_imag_root - c_abs(imag(r_star)))
-
             selector *= THETA(self.max_eta_min - self.eta_min(i, j))
 
             factor = (
@@ -267,22 +269,55 @@ class IntegrandBuilder:
             for factor, r_star in values:
 
                 if self.center_counterterm_region_at_origin:
-                    mask = THETA(self.thresh - self.r) / (
-                        N(2) / N(3) * self.thresh ** N(3)
-                    )
-                    integrated = Expression.LOG((self.thresh - r_star)/(
-                        -self.thresh - r_star
-                    ))
+
+                    if self.smooth_mask:
+                        mask = Expression.EXP(
+                            -((self.r) ** N(2)) / self.mask_width ** N(2)
+                        )
+                        norm = (
+                            sqrt(Expression.PI)
+                            * self.mask_width
+                            * self.mask_width ** N(2)
+                            / N(2)
+                        )
+                        mask = mask / norm
+                    else:
+                        mask = THETA(self.mask_width - self.r)
+                        norm = self.mask_width ** N(3) * N(2) / N(3)
+                        mask = mask / norm
+
+                    integrated = Expression.LOG(
+                        (self.thresh - r_star)
+                    ) - Expression.LOG(-self.thresh - r_star)
                 else:
                     real_r_star = real(r_star)
                     upper = real_r_star + self.thresh
                     lower = real_r_star - self.thresh
-                    mask = THETA(self.thresh - c_abs(self.r - real_r_star)) / (
-                        N(1) / N(3) * c_abs((upper ** N(3) - lower ** N(3)))
-                    )
-                    integrated = Expression.LOG(
-                        (upper - r_star)/(lower - r_star)
-                    )
+
+                    if self.smooth_mask:
+                        mask = Expression.EXP(
+                            -((real_r_star - self.r) ** N(2)) / self.mask_width ** N(2)
+                        )
+                        norm = (
+                            sqrt(Expression.PI)
+                            * self.mask_width
+                            * (real_r_star ** N(2) + self.mask_width ** N(2) / N(2))
+                        )
+                        mask = mask / norm
+                    else:
+                        mask = THETA(
+                            self.mask_width ** N(2) - (self.r - real(r_star)) ** N(2)
+                        )
+                        norm = (
+                            (real_r_star + self.mask_width) ** N(3)
+                            - (real_r_star - self.mask_width) ** N(3)
+                        ) / N(3)
+                        mask = mask / norm
+                        # mask = THETA(self.mask_width - c_abs(real_r_star-self.r)) / self.r**N(2)
+                        # norm = N(2) * self.mask_width
+                        # mask = mask / norm
+
+                    integrated = Expression.LOG((upper - r_star) / (lower - r_star))
 
                 ct += factor * real(r_star) ** N(2) * integrated * mask
         return ct
