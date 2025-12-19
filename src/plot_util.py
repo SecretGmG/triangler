@@ -93,8 +93,9 @@ def plot_complex_integration_with_ref(
         4, 1,
         sharex=True,
         figsize=(10, 10),
-        constrained_layout=True
+        gridspec_kw={"hspace": 0}
     )
+    
 
     # --- Real part ---
     axs[0].plot(ref_x_values, ref.real, label="Reference (real)", c = 'k')
@@ -112,7 +113,7 @@ def plot_complex_integration_with_ref(
     # --- Real pull ---
     axs[1].scatter(
         x_values,
-        (real_avg - ref_same_x.real) / real_err
+        (real_avg - ref_same_x.real) / (real_err+1e-10)
     )
     axs[1].axhline(0, lw=1, c="k")
     axs[1].set_ylabel("Pull (real)")
@@ -133,8 +134,11 @@ def plot_complex_integration_with_ref(
     # --- Imaginary pull ---
     axs[3].scatter(
         x_values,
-        (imag_avg - ref_same_x.imag) / imag_err
+        (imag_avg - ref_same_x.imag) / (imag_err+1e-10)
     )
     axs[3].axhline(0, lw=1, color="k")
     axs[3].set_ylabel("Pull (imag)")
+    for ax in axs:
+        ax.label_outer()
+    fig.subplots_adjust(hspace=0)
     return fig

@@ -6,19 +6,20 @@ import numpy as np
 
 
 THETA = S("Theta")
-SQRT_I_EPS = S("sqrt_i_eps")
+REAL = S("Real")
+IMAG = S("Imag")
+
 
 EXTERNAL_FUNCTIONS = {
     (THETA, "theta"): lambda args: 1.0 * (args[0] > 0),
-    (SQRT_I_EPS, "sqrt_i_eps"): lambda args: 1.0 * (args[0].conjugate()**0.5).conjugate()
+    (REAL, "real"): lambda args: np.real(args[0]),
+    (IMAG, "imag"): lambda args: np.imag(args[0]),
 }
 CUSTOM_HEADER = """
 template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }
-template<typename T> T sqrt_i_eps(T x) {
-    auto w = sqrt(x);
-    if (abs(x.imag()) < 1e-15 && x.real() < 0.0) {w = std::conj(w);}
-    return w;
-}
+template<typename T> T real(T x) { return T(x.real()); }
+template<typename T> T imag(T x) { return T(x.real()); }
+
 """
 
 class WrappedEvaluator:
@@ -35,7 +36,7 @@ class WrappedEvaluator:
     @staticmethod
     def flatten_vectors(
         args: dict[Expression | SymbolicaLorenzVec | SymbolicaVec, float | NDArray],
-    ) -> list[NDArray]:
+    ) -> NDArray:
         """
         Flatten values of scalars and vectors into a 2D array suitable for the evaluator.
 
@@ -55,7 +56,7 @@ class WrappedEvaluator:
             else:
                 flat_values += [np.asarray(value)]
 
-        return np.atleast_2d(np.column_stack(list(np.broadcast_arrays(*flat_values))))
+        return np.atleast_2d(np.column_stack(list(np.broadcast_arrays(*flat_values)))).astype(complex)
 
     def __init__(
         self,
@@ -112,5 +113,5 @@ class WrappedEvaluator:
         """
         
         values = WrappedEvaluator.flatten_vectors(dict(zip(self.args, args)))
-        return np.array(self.evaluator.evaluate(values))[:,0]
+        return self.evaluator.evaluate(values)[:,0]
 

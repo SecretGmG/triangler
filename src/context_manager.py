@@ -5,6 +5,7 @@ from integrand_builder import IntegrandBuilder
 from plot_util import plot_complex, plot_complex_plane, get_contour
 from wrapped_eval import WrappedEvaluator
 
+
 def norm(v):
     """
     computes the minkowski norm
@@ -56,8 +57,8 @@ def spherical(xs):
 
 
 def line_segment(k_hat, thresh):
-    """ 
-    returns a function that is a parametrization from 0,1 
+    """
+    returns a function that is a parametrization from 0,1
     to a line segment from - k_hat * thresh to k_hat * thresh
     """
     k_hat = np.asarray(k_hat)
@@ -74,48 +75,48 @@ class TriangleIntegrandContext:
     provides functions for setting up the parameters,
     evaluating and plotting the integrand
     """
-    
-    origin = np.array([0,0,0,0])
+
+    origin = np.array([0, 0, 0, 0])
 
     p1 = np.array([2, 1, 0, 0])
     p2 = np.array([2, -1, 0, 0])
 
     masses = [1, 1, 1]
-    
-    threshold = 5
+
+    subtraction_width = 5
     max_imag_root_part = 1e15
     max_eta_min = 0
     mask_width = 5
-    
+
     a = 1
     b = 1
     c = 1
-    
+
     def only_integrated_counterterm(self):
         self.a = 0
         self.b = 0
         self.c = 1
-    
+
     def only_unsubtracted(self):
         self.a = 1
         self.b = 0
         self.c = 0
-    
+
     def only_counterterm(self):
         self.a = 0
         self.b = -1
         self.c = 0
-    
+
     def combined_integrand(self):
         self.a = 1
         self.b = 1
         self.c = 1
-    
+
     def combined_integrand_without_integrated_counterterm(self):
         self.a = 1
         self.b = 1
         self.c = 0
-    
+
     def get_qs(self):
         """
         returns the qs arguments of the integrand as a list
@@ -125,28 +126,37 @@ class TriangleIntegrandContext:
             self.origin + np.zeros_like(self.p1),
             self.origin - self.p2,
         ]
-        
+
         return qs
-    
+
     def get_ordered_qs_and_masses(self):
         """
         returns masses and qs ordered by q0
         """
-        
-        return zip(*sorted(zip(self.get_qs(),self.masses), key=lambda q: q[0][0]))
-    
+
+        return zip(*sorted(zip(self.get_qs(), self.masses), key=lambda q: q[0][0]))
+
     def get_args(self):
         """
         returns the arguments of the integrand as a list except for the k argument
         """
         ordered_qs, ordered_masses = self.get_ordered_qs_and_masses()
-        
+
         return (
-            [np.pi, self.threshold, self.a, self.b, self.c, self.max_imag_root_part, self.max_eta_min, self.mask_width]
+            [
+                np.pi,
+                self.a,
+                self.b,
+                self.c,
+                self.subtraction_width,
+                self.max_imag_root_part,
+                self.max_eta_min,
+                self.mask_width,
+            ]
             + list(ordered_masses)
             + list(ordered_qs)
         )
-    
+
     def get_reference(self) -> complex:
         """
         returns the reference value of the integration using oneloop_bridge
@@ -165,7 +175,7 @@ class TriangleIntegrandContext:
         assert res.epsilon_minus_2 == 0
 
         return res.epsilon_0 * TO_FEYNMAN
-    
+
     def set_external_momenta(self, p12, p22, p32):
         """
         Set p1 and p2 in the center-of-momentum frame such that.
@@ -173,41 +183,44 @@ class TriangleIntegrandContext:
         and
         p1.x = p2.x = p1.y = p2.y = 0
         """
-    
+
         s = p32
         sqrt_s = np.sqrt(s)
-    
+
         # energies in the COM frame
         E1 = (s + p12 - p22) / (2.0 * sqrt_s)
         E2 = (s + p22 - p12) / (2.0 * sqrt_s)
-    
+
         # common three-momentum magnitude
         p_abs_sq = E1**2 - p12
         if p_abs_sq < 0:
-            raise ValueError("Kinematic point is not physically allowed (negative momentum^2).")
-    
+            raise ValueError(
+                "Kinematic point is not physically allowed (negative momentum^2)."
+            )
+
         p_abs = np.sqrt(p_abs_sq)
-    
+
         # pick them back-to-back along z
-        self.p1 = np.array([E1, 0.0, 0.0,  p_abs])
+        self.p1 = np.array([E1, 0.0, 0.0, p_abs])
         self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
-    
-    def set_anomalous_configuration(self, p2 =203): # TODO: make this exact
-        s = 350**2 # GeV
-        p12 = 120**2 # GeV
-        top_mass = 172.76 # GeV
-        bottom_mass = 4.18 # GeV
+
+    def set_anomalous_configuration(self, p2=203):  # TODO: make this exact
+        s = 350**2  # GeV
+        p12 = 120**2  # GeV
+        top_mass = 172.76  # GeV
+        bottom_mass = 4.18  # GeV
         self.masses = [top_mass, bottom_mass, top_mass]
-        self.origin = np.array([0,0,0,-37.9]) # TODO: make this exact
-        self.set_external_momenta(p12,p2**2,s)
+        self.origin = np.array([0, 0, 0, -37.9])  # TODO: make this exact
+        self.set_external_momenta(p12, p2**2, s)
+
 
 class TriangleIntegrandEvaluator:
     """
     provides functions for evaluating and plotting compiled expressions
     with a triangle integrand context
     """
-    
-    def __init__(self, evaluator = None, context = None):
+
+    def __init__(self, evaluator=None, context=None):
         if evaluator is None:
             ib = IntegrandBuilder()
             evaluator = WrappedEvaluator(
@@ -224,17 +237,18 @@ class TriangleIntegrandEvaluator:
         evaluates the integrand at k
         """
         shape = k.shape[:-1]
-        return self.evaluator.evaluate(self.context.get_args() + [k.reshape(-1, 3)]).reshape(shape)
-
+        return self.evaluator.evaluate(
+            self.context.get_args() + [k.reshape(-1, 3)]
+        ).reshape(shape)
 
     def plot_threshold_subtraction(
-        self, x_lim, y_lim, x_axis: int=0, y_axis: int=1, res=200
+        self, x_lim, y_lim, x_axis: int = 0, y_axis: int = 1, res=200
     ):
         """
         Visualizes the threshold subtraction procedure
         """
         axis_labels = ["x", "y", "z"]
-        
+
         x_dir = np.zeros(3)
         y_dir = np.zeros(3)
         x_dir[x_axis] = 1
@@ -254,7 +268,7 @@ class TriangleIntegrandEvaluator:
         self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 3, 1)
-        plt.title('Unsubtracted integrand')
+        plt.title("Unsubtracted integrand")
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, integrand)
         plt.xlabel(axis_labels[x_axis])
@@ -262,11 +276,11 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 4)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
         plt.xlabel(axis_labels[x_axis])
-        plt.ylabel('Integrand')
+        plt.ylabel("Integrand")
 
         self.context.only_counterterm()
         plt.subplot(2, 3, 2)
-        plt.title('Counterterm')
+        plt.title("Counterterm")
         counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, counter_term, cmap_factor=20)
         plt.xlabel(axis_labels[x_axis])
@@ -274,11 +288,11 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 5)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
         plt.xlabel(axis_labels[x_axis])
-        plt.ylabel('Integrand')
+        plt.ylabel("Integrand")
 
         self.context.combined_integrand_without_integrated_counterterm()
         plt.subplot(2, 3, 3)
-        plt.title('Subtracted integrand')
+        plt.title("Subtracted integrand")
         subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
         plot_complex_plane(xs_plane, subtracted)
         plt.xlabel(axis_labels[x_axis])
@@ -286,7 +300,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 6)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
         plt.xlabel(axis_labels[x_axis])
-        plt.ylabel('Integrand')
+        plt.ylabel("Integrand")
 
     def plot_planes(self, x_lim, y_lim, res=300, divide_jacobian=False):
         """
@@ -303,16 +317,16 @@ class TriangleIntegrandEvaluator:
             y = np.linspace(y_lim[0], y_lim[1], res)
             X, Y = np.meshgrid(x, y)
             xs_plane = X + Y * 1j
-            ks_plane = (X[..., None] * x_axis + Y[..., None] * y_axis)
+            ks_plane = X[..., None] * x_axis + Y[..., None] * y_axis
 
             plt.subplot(1, 3, i + 1)
             integrand = self.eval(ks_plane)
             if divide_jacobian:
-                integrand *= np.sum(ks_plane**2, axis = -1)
+                integrand *= np.sum(ks_plane**2, axis=-1)
             plot_complex_plane(xs_plane, integrand)
             plt.xlabel(["x", "y", "z"][x_])
             plt.ylabel(["x", "y", "z"][y_])
-    
+
     def plot_unit_sphere(self, res=200):
         """
         Visualizes the integrand along the unit hemisphere
@@ -327,19 +341,13 @@ class TriangleIntegrandEvaluator:
         plt.xlabel(r"$\theta/2\pi$")
         plt.ylabel(r"$\cos(\phi)$")
 
-    def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax = None):
+    def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax=None):
         if ax is None:
             ax = plt.gca()
         x = np.linspace(re_lim[0], re_lim[1], res)
         y = np.linspace(im_lim[0], im_lim[1], res)
         X, Y = np.meshgrid(x, y)
 
-        xs = X + 1j*Y
+        xs = X + 1j * Y
         val = self.eval(xs[..., None] * k_hat)
         plot_complex_plane(xs, val, ax)
-
-
-    
-
-            
-    
