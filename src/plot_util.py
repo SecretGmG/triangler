@@ -93,7 +93,8 @@ def plot_complex_integration_with_ref(
         4, 1,
         sharex=True,
         figsize=(10, 10),
-        gridspec_kw={"hspace": 0}
+        gridspec_kw={"hspace": 0},
+        height_ratios=[2, 1, 2, 1]
     )
     
 
@@ -116,6 +117,8 @@ def plot_complex_integration_with_ref(
         (real_avg - ref_same_x.real) / (real_err+1e-10)
     )
     axs[1].axhline(0, lw=1, c="k")
+    axs[1].axhline(3, lw=1, c="k", linestyle="--")
+    axs[1].axhline(-3, lw=1, c="k", linestyle="--")
     axs[1].set_ylabel("Pull (real)")
 
     # --- Imaginary part ---
@@ -137,6 +140,8 @@ def plot_complex_integration_with_ref(
         (imag_avg - ref_same_x.imag) / (imag_err+1e-10)
     )
     axs[3].axhline(0, lw=1, color="k")
+    axs[3].axhline(3, lw=1, c="k", linestyle="--")
+    axs[3].axhline(-3, lw=1, c="k", linestyle="--")
     axs[3].set_ylabel("Pull (imag)")
     for ax in axs:
         ax.label_outer()
