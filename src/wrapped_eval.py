@@ -4,10 +4,12 @@ from numpy.typing import NDArray
 import numpy as np
 
 
-
-THETA = S("Theta")
-REAL = S("Real")
-IMAG = S("Imag")
+# Heaviside theta function
+THETA = S("Theta", is_real=True, is_positive=True, is_scalar=True)
+# Extracts the real part of a complex number
+REAL = S("Real", is_antisymmetric=True, is_linear=True, is_scalar=True, is_real=True)
+# Extracts the imaginary part of a complex number
+IMAG = S("Imag", is_antisymmetric=True, is_linear=True, is_scalar=True, is_real=True)
 
 
 EXTERNAL_FUNCTIONS = {
@@ -18,8 +20,7 @@ EXTERNAL_FUNCTIONS = {
 CUSTOM_HEADER = """
 template<typename T> T theta(T x) { return x.real() > 0 ? T(1) : T(0); }
 template<typename T> T real(T x) { return T(x.real()); }
-template<typename T> T imag(T x) { return T(x.real()); }
-
+template<typename T> T imag(T x) { return T(x.imag()); }
 """
 
 class WrappedEvaluator:

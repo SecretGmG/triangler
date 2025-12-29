@@ -7,8 +7,7 @@ class ComplexIntegrator:
     """
     Integrator for complex functions
     
-    keeps track of the real and imaginary parts separately, 
-    uses the absolute value of the integrand as the weight
+    keeps track of the real and imaginary parts separately
     """
 
     def __init__(self, n_dims):
@@ -30,6 +29,19 @@ class ComplexIntegrator:
         learning_weight = 1.5,
         weighter = None
     ):
+        """
+        integrates a complex function
+        
+        integrand: the function to integrate
+        parametrization: a function that maps samples to points and jacobians
+        n_epochs: the number of epochs to train for
+        samples_per_epoch: the number of samples to generate per epoch
+        rng: the random number generator to use
+        learning_weight: the learning weight to use
+        weighter: the weighter to use, defaults to np.abs
+        
+        returns a ComplexIntegrationResult
+        """
         if rng is None:
             rng=symbolica.RandomNumberGenerator(0, 0)
 
@@ -44,7 +56,7 @@ class ComplexIntegrator:
 
             points, jacs = parametrization(xs)
 
-            values = integrand(points) * jacs
+            values : np.typing.ArrayLike = integrand(points) * jacs
             
             mask = np.isfinite(values)
             
@@ -123,43 +135,4 @@ class ComplexIntegrationResult:
             f"ComplexIntegratorResult:\n"
             f"value = ({self.real_avg:.6f}±{self.real_err:.6f}) + i({self.imag_avg:.6f}±{self.imag_err:.6f})\n"
             f"relative absolute error = {rae:.2g}% , convergence={conv:.3f}, iters={iters}"
-        )
-
-    def __add__(self, other):
-        if not isinstance(other, ComplexIntegrationResult):
-            return NotImplemented
-
-        real_avg = self.real_avg + other.real_avg
-        imag_avg = self.imag_avg + other.imag_avg
-
-        real_err = np.sqrt(self.real_err**2 + other.real_err**2)
-        imag_err = np.sqrt(self.imag_err**2 + other.imag_err**2)
-
-        iters = self.iters + other.iters
-
-        return ComplexIntegrationResult(
-            real_avg=real_avg,
-            imag_avg=imag_avg,
-            real_err=real_err,
-            imag_err=imag_err,
-            iters=iters,
-        )
-    def __sub__(self, other):
-        if not isinstance(other, ComplexIntegrationResult):
-            return NotImplemented
-
-        real_avg = self.real_avg - other.real_avg
-        imag_avg = self.imag_avg - other.imag_avg
-
-        real_err = np.sqrt(self.real_err**2 + other.real_err**2)
-        imag_err = np.sqrt(self.imag_err**2 + other.imag_err**2)
-
-        iters = self.iters + other.iters
-
-        return ComplexIntegrationResult(
-            real_avg=real_avg,
-            imag_avg=imag_avg,
-            real_err=real_err,
-            imag_err=imag_err,
-            iters=iters,
         )

@@ -5,7 +5,8 @@ from integrator import ComplexIntegrationResult
 
 
 def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
-    """Plot a complex→complex function using HSV color encoding for phase and magnitude.
+    """
+    Plot a complex -> complex function using HSV color encoding for phase and magnitude.
     xs is a 2D grid (from np.meshgrid) of complex-plane x-values, ys is the complex output.
     NaN or inf values in ys are handled gracefully and shown as transparent.
     """
@@ -62,6 +63,9 @@ def plot_complex(xs, ys):
 
 
 def get_contour(x_lim, y_lim, z_lim, f, res=100):
+    """
+    Get a pyvista contour of a 3D function
+    """
     import pyvista as pv
 
     x = np.linspace(x_lim[0], x_lim[1], res)
@@ -84,6 +88,9 @@ def plot_complex_integration_with_ref(
     ref: np.typing.ArrayLike,
     ref_x_values
 ):
+    """
+    Plots the real and imaginary parts of a complex integration result on a single plot
+    """
     real_avg = np.array([r.real_avg for r in res])
     real_err = np.array([r.real_err for r in res])
     imag_avg = np.array([r.imag_avg for r in res])
@@ -98,51 +105,53 @@ def plot_complex_integration_with_ref(
     )
     
 
-    # --- Real part ---
-    axs[0].plot(ref_x_values, ref.real, label="Reference (real)", c = 'k')
+    #### Real part ####
+    axs[0].plot(ref_x_values, ref.real, label="Reference", c = 'k')
     axs[0].errorbar(
         x_values,
         real_avg,
         real_err,
         fmt="o",
         capsize=3,
-        label="Measurement"
+        label="Numerical"
     )
     axs[0].set_ylabel("Re(value)")
     axs[0].legend()
 
-    # --- Real pull ---
-    axs[1].scatter(
+    axs[1].errorbar(
         x_values,
-        (real_avg - ref_same_x.real) / (real_err+1e-10)
+        100 * (real_avg - ref_same_x.real) / (ref_same_x.real+1e-10),
+        100 * real_err / np.abs(ref_same_x.real+1e-10),
+        fmt="o",
+        capsize=3,
+        label="Deviation"
     )
-    axs[1].axhline(0, lw=1, c="k")
-    axs[1].axhline(3, lw=1, c="k", linestyle="--")
-    axs[1].axhline(-3, lw=1, c="k", linestyle="--")
-    axs[1].set_ylabel("Pull (real)")
+    axs[1].axhline(0, ls = "--", c = "black")
+    axs[1].set_ylabel("Re(Deviation) [%]")
 
-    # --- Imaginary part ---
-    axs[2].plot(ref_x_values, ref.imag, label="Reference (imag)", c = 'k')
+    #### Imaginary part ###
+    axs[2].plot(ref_x_values, ref.imag, label="Reference", c = 'k')
     axs[2].errorbar(
         x_values,
         imag_avg,
         imag_err,
         fmt="o",
         capsize=3,
-        label="Measurement"
+        label="Numerical"
     )
     axs[2].set_ylabel("Im(value)")
     axs[2].legend()
 
-    # --- Imaginary pull ---
-    axs[3].scatter(
+    axs[3].errorbar(
         x_values,
-        (imag_avg - ref_same_x.imag) / (imag_err+1e-10)
+        100 * (imag_avg - ref_same_x.imag) / (ref_same_x.imag+1e-10),
+        100 * imag_err / np.abs(ref_same_x.imag+1e-10),
+        fmt="o",
+        capsize=3,
+        label="Deviation"
     )
-    axs[3].axhline(0, lw=1, color="k")
-    axs[3].axhline(3, lw=1, c="k", linestyle="--")
-    axs[3].axhline(-3, lw=1, c="k", linestyle="--")
-    axs[3].set_ylabel("Pull (imag)")
+    axs[3].axhline(0, ls = "--", c = "black")
+    axs[3].set_ylabel("Im(Deviation) [%]")
     for ax in axs:
         ax.label_outer()
     fig.subplots_adjust(hspace=0)

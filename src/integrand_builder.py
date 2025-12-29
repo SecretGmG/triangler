@@ -10,52 +10,47 @@ I_EPS = Expression.I * EPS
 
 
 def exp_mask(x, center, width):
-    mask = Expression.EXP(
-        -((center - x) ** N(2)) / width ** N(2)
-    )
-    norm = (
-        sqrt(Expression.PI)
-        * width
-        * (center ** N(2) + width ** N(2) / N(2))
-    )
+    mask = Expression.EXP(-((center - x) ** N(2)) / width ** N(2))
+    norm = sqrt(Expression.PI) * width * (center ** N(2) + width ** N(2) / N(2))
     return mask / norm
+
 
 def theta_mask(x, center, width):
     mask = THETA(width - c_abs(x - center))
-    norm = (
-    (center + width) ** N(3)
-        - (center - width) ** N(3)
-    ) / N(3)
+    norm = ((center + width) ** N(3) - (center - width) ** N(3)) / N(3)
     return mask / norm
-    
 
 
 def sqrt(e: Expression):
     """
-    returns e**HALF
+    returns the square root of e
     """
     return e**HALF
 
+
 def c_abs(e: Expression):
     """
-    returns the absolute value of e
+    returns the absolute value of the complex number e
     """
     return sqrt(e * e.conj())
 
 
 class IntegrandBuilder:
     """
-    provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm
+    provides functions for building the integrand, the counterterm of the integrand and the radially integrated counterterm expressions
     """
 
-    # Build options
+    #### Build options ####
+    # True: check singularities per sample, False: don't check singularities
     check_singularities_per_sample = False
     # True: subtract sphere centered at origin, False: subtract sliver at e-surface
     center_counterterm_region_at_origin = True
+    # True: use exponential mask, False: use theta mask
     smooth_mask = False
+    # True: use complex distance for counterterm bounds, False: use real distance
     use_complex_dist = False
 
-    # kinematics
+    #### kinematics ####
     qs: list[SymbolicaLorenzVec] = [
         SymbolicaLorenzVec.from_name(f"q{i}") for i in range(3)
     ]
@@ -68,7 +63,7 @@ class IntegrandBuilder:
     c = S("c")
 
     # hyperparameters
-    subtraction_width: Expression = S("lambda")
+    subtraction_radius: Expression = S("lambda")
     max_imag_root = S("max_imag_root_part")
     max_eta_min = S("max_eta_min")
     mask_width = S("mask_width")
@@ -79,8 +74,8 @@ class IntegrandBuilder:
 
     # indices for the counterterm
     # this only works by assuming that q0_0 < q1_0 < q2_0
-    # if this where not the case, other indices have to be used
-    eta_indices = [
+    # if this where not the case, other indices have to be used here
+    counterterm_eta_indices = [
         (0, 1),
         (1, 2),
         (0, 2),
@@ -111,7 +106,7 @@ class IntegrandBuilder:
                 self.a,
                 self.b,
                 self.c,
-                self.subtraction_width,
+                self.subtraction_radius,
                 self.max_imag_root,
                 self.max_eta_min,
                 self.mask_width,
@@ -179,8 +174,8 @@ class IntegrandBuilder:
         d = b ** N(2) - N(4) * a * c
 
         return [
-            (-b + sqrt(d)) / (N(2) * a) + I_EPS, # needed for correct branch choice
-            (-b - sqrt(d)) / (N(2) * a) - I_EPS, # needed for correct branch choice
+            (-b + sqrt(d)) / (N(2) * a) + I_EPS,  # needed for correct branch choice
+            (-b - sqrt(d)) / (N(2) * a) - I_EPS,  # needed for correct branch choice
         ]
 
     def ddk_eta(self, i, j, k):
@@ -255,15 +250,19 @@ class IntegrandBuilder:
         returns the counterterm of the integrand at self.k
         """
         ct = N(0)
-        for i, j in self.eta_indices:
+        for i, j in self.counterterm_eta_indices:
             for factor, r_star in self.e_surf_counterterm(i, j):
                 if self.center_counterterm_region_at_origin:
-                    selector = THETA(self.subtraction_width - self.r)
+                    selector = THETA(self.subtraction_radius - self.r)
                 else:
                     if self.use_complex_dist:
-                        selector = THETA(self.subtraction_width - c_abs(self.r - r_star))
+                        selector = THETA(
+                            self.subtraction_radius - c_abs(self.r - r_star)
+                        )
                     else:
-                        selector = THETA(self.subtraction_width - c_abs(self.r - REAL(r_star)))
+                        selector = THETA(
+                            self.subtraction_radius - c_abs(self.r - REAL(r_star))
+                        )
                 ct += (
                     selector
                     * factor
@@ -277,29 +276,33 @@ class IntegrandBuilder:
         returns the radially integrated counterterm along the direction self.k_hat
         """
         ct = N(0)
-        for i, j in self.eta_indices:
+        for i, j in self.counterterm_eta_indices:
             values = self.e_surf_counterterm(i, j)
             for factor, r_star in values:
-                
+
                 if self.use_complex_dist:
-                    thresh = THETA(self.subtraction_width**2 - IMAG(r_star)**2)*sqrt(self.subtraction_width**2 - IMAG(r_star)**2)
+                    thresh = THETA(
+                        self.subtraction_radius**2 - IMAG(r_star) ** 2
+                    ) * sqrt(self.subtraction_radius**2 - IMAG(r_star) ** 2)
                 else:
-                    thresh = self.subtraction_width
+                    thresh = self.subtraction_radius
 
                 if self.center_counterterm_region_at_origin:
-                    integrated = Expression.LOG(
-                        (thresh - r_star)
-                    ) - Expression.LOG(-thresh - r_star)
-                    
+                    integrated = Expression.LOG((thresh - r_star)) - Expression.LOG(
+                        -thresh - r_star
+                    )
+
                     center = N(0)
                 else:
                     real_r_star = REAL(r_star)
                     upper = real_r_star + thresh
                     lower = real_r_star - thresh
-                    integrated = Expression.LOG((upper - r_star))-Expression.LOG((lower - r_star))
-                    
+                    integrated = Expression.LOG((upper - r_star)) - Expression.LOG(
+                        (lower - r_star)
+                    )
+
                     center = real_r_star
-                
+
                 if self.smooth_mask:
                     mask = exp_mask(self.r, center, self.mask_width)
                 else:
@@ -314,7 +317,7 @@ class IntegrandBuilder:
             a * unsubtracted() - b * ct() + c * integrated_counterterm()
 
         integrating this over R³ with a = b = c = 1 gives the result of the  triangle integral
-        
+
         changing the values of a, b, c allows for disabling subtraction and looking at the different contributions separately
         """
         return (

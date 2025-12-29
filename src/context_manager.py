@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from integrand_builder import IntegrandBuilder
-from plot_util import plot_complex, plot_complex_plane, get_contour
+from plot_util import plot_complex, plot_complex_plane
 from wrapped_eval import WrappedEvaluator
 
 
@@ -56,22 +56,9 @@ def spherical(xs):
     return r[:, None] * v, jac
 
 
-def line_segment(k_hat, thresh):
-    """
-    returns a function that is a parametrization from 0,1
-    to a line segment from - k_hat * thresh to k_hat * thresh
-    """
-    k_hat = np.asarray(k_hat)
-
-    def temp(xs):
-        return ((xs[:, 0] * 2 - 1) * thresh)[:, None] * k_hat[None, :], (2 * thresh)
-
-    return temp
-
-
 class TriangleIntegrandContext:
     """
-    Manages the context of the triangle integrand
+    Manages the constant (hyper-)parameters of the triangle integrand
     provides functions for setting up the parameters,
     evaluating and plotting the integrand
     """
@@ -119,7 +106,7 @@ class TriangleIntegrandContext:
 
     def get_qs(self):
         """
-        returns the qs arguments of the integrand as a list
+        returns the loop momenta offset arguments of the integrand as a list
         """
         qs = [
             self.origin + self.p1,
@@ -132,13 +119,14 @@ class TriangleIntegrandContext:
     def get_ordered_qs_and_masses(self):
         """
         returns masses and qs ordered by q0
+        to conform to the expected ordering of the integrand
         """
 
         return zip(*sorted(zip(self.get_qs(), self.masses), key=lambda q: q[0][0]))
 
     def get_args(self):
         """
-        returns the arguments of the integrand as a list except for the k argument
+        returns the arguments of the integrand (except for the k argument) as a list
         """
         ordered_qs, ordered_masses = self.get_ordered_qs_and_masses()
 
@@ -176,23 +164,24 @@ class TriangleIntegrandContext:
 
         return res.epsilon_0 * TO_FEYNMAN
 
-    def set_external_momenta(self, p12, p22, p32):
+    def set_external_momenta(self, p1_sq, p2_sq, p3_sq):
         """
         Set p1 and p2 in the center-of-momentum frame such that.
-        p1^2 = p12, p2^2 = p22, (p1 + p2)^2 = p32
+        p1^2 = p1_sq, p2^2 = p2_sq, (p1 + p2)^2 = p3_sq
         and
         p1.x = p2.x = p1.y = p2.y = 0
+        and
+        p1.z >= 0, p2.z <= 0
         """
 
-        s = p32
+        s = p3_sq
         sqrt_s = np.sqrt(s)
 
         # energies in the COM frame
-        E1 = (s + p12 - p22) / (2.0 * sqrt_s)
-        E2 = (s + p22 - p12) / (2.0 * sqrt_s)
+        E1 = (s + p1_sq - p2_sq) / (2.0 * sqrt_s)
+        E2 = (s + p2_sq - p1_sq) / (2.0 * sqrt_s)
 
-        # common three-momentum magnitude
-        p_abs_sq = E1**2 - p12
+        p_abs_sq = E1**2 - p1_sq
         if p_abs_sq < 0:
             raise ValueError(
                 "Kinematic point is not physically allowed (negative momentum^2)."
@@ -200,7 +189,6 @@ class TriangleIntegrandContext:
 
         p_abs = np.sqrt(p_abs_sq)
 
-        # pick them back-to-back along z
         self.p1 = np.array([E1, 0.0, 0.0, p_abs])
         self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
 
@@ -301,7 +289,7 @@ class TriangleIntegrandEvaluator:
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel("Integrand")
-
+        
     def plot_planes(self, x_lim, y_lim, res=300, divide_jacobian=False):
         """
         Visualizes the integrand in the three planes
@@ -329,7 +317,7 @@ class TriangleIntegrandEvaluator:
 
     def plot_unit_sphere(self, res=200):
         """
-        Visualizes the integrand along the unit hemisphere
+        Visualizes the integrand along the unit sphere
         """
         u = np.linspace(-1, 1, res)
         v = np.linspace(0, 1, res)
@@ -342,6 +330,9 @@ class TriangleIntegrandEvaluator:
         plt.ylabel(r"$\cos(\phi)$")
 
     def plot_complex_line(self, k_hat, re_lim, im_lim, res, ax=None):
+        """
+        plots the complex -> complex function integrand(x*k_hat) where x is in re_lim x im_lim*j
+        """
         if ax is None:
             ax = plt.gca()
         x = np.linspace(re_lim[0], re_lim[1], res)
