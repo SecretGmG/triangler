@@ -255,6 +255,7 @@ class TriangleIntegrandEvaluator:
 
         self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
+        axs, fig = plt.subplots(2, 3, height_ratios=[3,2], figsize=(20,10))
         plt.subplot(2, 3, 1)
         plt.title("Unsubtracted integrand")
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
@@ -263,6 +264,7 @@ class TriangleIntegrandEvaluator:
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.legend()
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel("Integrand")
 
@@ -275,6 +277,7 @@ class TriangleIntegrandEvaluator:
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 5)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.legend()
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel("Integrand")
 
@@ -287,6 +290,7 @@ class TriangleIntegrandEvaluator:
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 6)
         plot_complex(x, self.eval(ks_line) * ks_line_jac)
+        plt.legend()
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel("Integrand")
         
