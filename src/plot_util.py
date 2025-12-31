@@ -26,9 +26,9 @@ def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
     hue = (phase + np.pi) / (2 * np.pi)
     value = np.abs(np.where(valid_mask, ys, 0))
 
-    value = value / value.max()
+    value = value / (value.max() + 1e-10)
     value = np.log(cmap_factor * value + 1)
-    value = value / value.max()
+    value = value / (value.max() + 1e-10)
 
     # HSV → RGB
     rgb = plt.cm.hsv(hue)
