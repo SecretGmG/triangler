@@ -192,13 +192,13 @@ class TriangleIntegrandContext:
         self.p1 = np.array([E1, 0.0, 0.0, p_abs])
         self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
 
-    def set_anomalous_configuration(self, p2=203):  # TODO: make this exact
+    def set_anomalous_configuration(self, p2):
         s = 350**2  # GeV
         p12 = 120**2  # GeV
-        top_mass = 172.76  # GeV
+        top_mass = 172.52  # GeV
         bottom_mass = 4.18  # GeV
         self.masses = [top_mass, bottom_mass, top_mass]
-        self.origin = np.array([0, 0, 0, -37.9])  # TODO: make this exact
+        self.origin = np.array([0, 0, 0, -37.4324595])
         self.set_external_momenta(p12, p2**2, s)
 
 
