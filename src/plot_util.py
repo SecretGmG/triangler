@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from integrator import ComplexIntegrationResult
 
 
-def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
+def plot_complex_plane(xs, ys, ax=None, cmap_factor=1, clip = 100):
     """
     Plot a complex -> complex function using HSV color encoding for phase and magnitude.
     xs is a 2D grid (from np.meshgrid) of complex-plane x-values, ys is the complex output.
@@ -26,6 +26,8 @@ def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
     hue = (phase + np.pi) / (2 * np.pi)
     value = np.abs(np.where(valid_mask, ys, 0))
 
+    
+    value = value.clip(0, np.percentile(value, clip))
     value = value / (value.max() + 1e-10)
     value = np.log(cmap_factor * value + 1)
     value = value / (value.max() + 1e-10)

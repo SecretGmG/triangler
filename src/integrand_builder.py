@@ -5,7 +5,7 @@ import numpy as np
 
 
 HALF = N(1) / N(2)
-EPS = N(np.finfo(np.float64).smallest_normal)
+EPS = N(np.finfo(np.float64).smallest_subnormal)
 I_EPS = Expression.I * EPS
 
 
@@ -266,7 +266,7 @@ class IntegrandBuilder:
                 ct += (
                     selector
                     * factor
-                    * (REAL(r_star) / self.r) ** N(2)
+                    * (r_star / self.r) ** N(2)
                     / (self.r - r_star)
                 )
         return ct
@@ -308,7 +308,7 @@ class IntegrandBuilder:
                 else:
                     mask = theta_mask(self.r, center, self.mask_width)
 
-                ct += factor * REAL(r_star) ** N(2) * integrated * mask
+                ct += factor * r_star ** N(2) * integrated * mask
         return ct
 
     def combined_result(self):
