@@ -231,7 +231,7 @@ class TriangleIntegrandEvaluator:
 
     def plot_threshold_subtraction(
         self, x_lim, y_lim, x_axis: int = 0, y_axis: int = 1, res=200
-    ):
+    ,clip = 100):
         """
         Visualizes the threshold subtraction procedure
         """
@@ -259,7 +259,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 1)
         plt.title("Unsubtracted integrand")
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, integrand, clip=99)
+        plot_complex_plane(xs_plane, integrand, clip=clip)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)
@@ -272,7 +272,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 2)
         plt.title("Counterterm")
         counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, counter_term, clip = 99)
+        plot_complex_plane(xs_plane, counter_term, clip = clip)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 5)
@@ -285,7 +285,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 3)
         plt.title("Subtracted integrand")
         subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, subtracted, clip = 99)
+        plot_complex_plane(xs_plane, subtracted, clip = clip)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 6)
