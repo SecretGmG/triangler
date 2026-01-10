@@ -90,7 +90,9 @@ class WrappedEvaluator:
                 return
             except Exception as e:
                 print(f'could not load {path} due to {e}')
+        
         print(f'Compiling evaluator: "{self.name}"')
+        
         self.evaluator: CompiledComplexEvaluator = self.expression.evaluator(
             {}, {}, self.flat_args(), external_functions=EXTERNAL_FUNCTIONS
         ).compile(
@@ -100,6 +102,7 @@ class WrappedEvaluator:
             number_type="complex",
             custom_header=CUSTOM_HEADER,
         )
+        
         print('Done!')
 
     def evaluate(self, args: list[NDArray]) -> NDArray:

@@ -3,7 +3,6 @@ from symbolica import S, N, Expression
 from wrapped_eval import THETA, REAL, IMAG
 import numpy as np
 
-
 HALF = N(1) / N(2)
 EPS = N(np.finfo(np.float64).smallest_subnormal)
 I_EPS = Expression.I * EPS

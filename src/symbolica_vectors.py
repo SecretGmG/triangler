@@ -2,7 +2,7 @@ from symbolica import N, S, N
 
 class SymbolicaLorenzVec:
     """
-    represents a lorentz vector of symbolic components
+    represents a lorentz 4-vector of symbolic components
     """
     def __init__(self, symbols : list):
         self.values = symbols
@@ -53,6 +53,9 @@ class SymbolicaLorenzVec:
         return str(self)
 
 class SymbolicaVec:
+    """
+    represents a 3-vector of symbolic components
+    """
     def __init__(self, symbols : list):
         self.values = symbols
     @staticmethod

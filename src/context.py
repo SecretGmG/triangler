@@ -233,7 +233,7 @@ class TriangleIntegrandEvaluator:
         self, x_lim, y_lim, x_axis: int = 0, y_axis: int = 1, res=200
     ,clip = 100):
         """
-        Visualizes the threshold subtraction procedure
+        Visualizes the threshold subtraction procedure to successfully visualize the thresholds a clip value may be provided, which clips the function at the percentile of the given clip value
         """
         axis_labels = ["x", "y", "z"]
 
@@ -255,11 +255,12 @@ class TriangleIntegrandEvaluator:
 
         self.context.only_unsubtracted()
         plt.figure(figsize=(20, 10))
-        axs, fig = plt.subplots(2, 3, height_ratios=[3,2], figsize=(20,10))
+        plt.subplots(2, 3, height_ratios=[3,2], figsize=(20,10))
         plt.subplot(2, 3, 1)
         plt.title("Unsubtracted integrand")
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, integrand, clip=clip)
+        integrand = np.clip(integrand, None, np.percentile(integrand, clip))
+        plot_complex_plane(xs_plane, integrand)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)
@@ -272,7 +273,8 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 2)
         plt.title("Counterterm")
         counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, counter_term, clip = clip)
+        counter_term = np.clip(counter_term, None, np.percentile(counter_term, clip))
+        plot_complex_plane(xs_plane, counter_term, clip)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 5)
@@ -296,7 +298,7 @@ class TriangleIntegrandEvaluator:
         
     def plot_planes(self, x_lim, y_lim, res=300, divide_jacobian=False):
         """
-        Visualizes the integrand in the three planes
+        Visualizes the integrand in the three planes xy, xz, yz
         """
         plt.figure(figsize=(20, 7))
         for i, (x_, y_) in enumerate([(0, 1), (1, 2), (2, 0)]):
