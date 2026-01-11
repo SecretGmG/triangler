@@ -259,8 +259,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 1)
         plt.title("Unsubtracted integrand")
         integrand = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        integrand = np.clip(integrand, None, np.percentile(integrand, clip))
-        plot_complex_plane(xs_plane, integrand)
+        plot_complex_plane(xs_plane, clip_abs(integrand, clip))
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 4)
@@ -273,8 +272,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 2)
         plt.title("Counterterm")
         counter_term = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        counter_term = np.clip(counter_term, None, np.percentile(counter_term, clip))
-        plot_complex_plane(xs_plane, counter_term, clip)
+        plot_complex_plane(xs_plane, clip_abs(counter_term, clip))
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 5)
@@ -287,7 +285,7 @@ class TriangleIntegrandEvaluator:
         plt.subplot(2, 3, 3)
         plt.title("Subtracted integrand")
         subtracted = (self.eval(ks_plane) * ks_plane_jac).reshape(res, res)
-        plot_complex_plane(xs_plane, subtracted, clip = clip)
+        plot_complex_plane(xs_plane, subtracted)
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel(axis_labels[y_axis])
         plt.subplot(2, 3, 6)
@@ -295,7 +293,7 @@ class TriangleIntegrandEvaluator:
         plt.legend()
         plt.xlabel(axis_labels[x_axis])
         plt.ylabel("Integrand")
-        
+
     def plot_planes(self, x_lim, y_lim, res=300, divide_jacobian=False):
         """
         Visualizes the integrand in the three planes xy, xz, yz
@@ -348,3 +346,7 @@ class TriangleIntegrandEvaluator:
         xs = X + 1j * Y
         val = self.eval(xs[..., None] * k_hat)
         plot_complex_plane(xs, val, ax)
+
+
+def clip_abs(x, clip):
+    return x*np.clip(np.abs(x), None, np.percentile(np.abs(x), clip))/(np.abs(x) + 1e-10)

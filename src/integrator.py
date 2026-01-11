@@ -123,12 +123,12 @@ class ComplexIntegrationResult:
     def nr_iters(self):
         return self.iters
 
-    def cv(self):
+    def rsd(self):
         return self.relative_abs_err() * np.sqrt(self.nr_iters())
 
     def __repr__(self):
         rae = self.relative_abs_err() * 100
-        conv = self.cv()
+        conv = self.rsd()
         iters = self.nr_iters()
 
         return (
