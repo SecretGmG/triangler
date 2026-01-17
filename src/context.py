@@ -1,3 +1,4 @@
+from typing import Callable
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -109,9 +110,9 @@ class TriangleIntegrandContext:
         returns the loop momenta offset arguments of the integrand as a list
         """
         qs = [
-            self.origin + self.p1,
-            self.origin + np.zeros_like(self.p1),
-            self.origin - self.p2,
+            -self.origin + self.p1,
+            -self.origin + np.zeros_like(self.p1),
+            -self.origin - self.p2,
         ]
 
         return qs
@@ -192,14 +193,7 @@ class TriangleIntegrandContext:
         self.p1 = np.array([E1, 0.0, 0.0, p_abs])
         self.p2 = np.array([E2, 0.0, 0.0, -p_abs])
 
-    def set_anomalous_configuration(self, p2):
-        s = 350**2  # GeV
-        p12 = 120**2  # GeV
-        top_mass = 172.52  # GeV
-        bottom_mass = 4.18  # GeV
-        self.masses = [top_mass, bottom_mass, top_mass]
-        self.origin = np.array([0, 0, 0, -37.4324595])
-        self.set_external_momenta(p12, p2**2, s)
+
 
 
 class TriangleIntegrandEvaluator:
@@ -350,3 +344,111 @@ class TriangleIntegrandEvaluator:
 
 def clip_abs(x, clip):
     return x*np.clip(np.abs(x), None, np.percentile(np.abs(x), clip))/(np.abs(x) + 1e-10)
+
+
+
+
+class ThresholdFinder:
+    """
+    Initialize the ThresholdFinder.
+
+    Builds integrand evaluators for two selected eta-radius roots and binds
+    them to the provided evaluation context.
+
+    Parameters
+    ----------
+    ctx
+        Evaluation context whose state is modified during threshold search.
+    eta_a : tuple[int, int], optional
+        Indices passed to IntegrandBuilder.eta_radius_roots for surface A.
+    eta_b : tuple[int, int], optional
+        Indices passed to IntegrandBuilder.eta_radius_roots for surface B.
+    root_a : int, optional
+        Which root to select from the eta_a root list.
+    root_b : int, optional
+        Which root to select from the eta_b root list.
+    """
+    def __init__(self, ctx, eta_a = (0,1), eta_b = (0,2), root_a = 0, root_b = 1):
+        ib = IntegrandBuilder()
+        a = ib.eta_radius_roots(*eta_a)[root_a]
+        b = ib.eta_radius_roots(*eta_b)[root_b]
+        self.a_eval = TriangleIntegrandEvaluator(WrappedEvaluator(a, ib.get_args(), "a"), ctx)
+        self.b_eval = TriangleIntegrandEvaluator(WrappedEvaluator(b, ib.get_args(), "b"), ctx)
+        self.ctx = ctx
+    
+    def get_root_a(self) -> float:
+        return self.a_eval.eval(np.array([0,0,1])).real
+    def get_root_b(self) -> float:
+        return self.b_eval.eval(np.array([0,0,1])).real
+    
+    def find_threshold(
+    self,
+    parameter: Callable[[float], None],
+    lower_bound: float,
+    upper_bound: float,
+    max_iter: int = 1000,
+    tol: float = 1e-10,
+):
+        """
+        Find a parameter value where the two roots coincide using bisection.
+
+        Performs a binary search over the given parameter interval to find a
+        value for which get_root_a() == get_root_b(). The supplied callable is
+        assumed to mutate the internal context accordingly.
+
+        Monotonicity of both roots is assumed, but their direction is not; the
+        method automatically determines whether the solution is bracketed.
+
+        Parameters
+        ----------
+        parameter : Callable[[float], None]
+            Function that applies a parameter value to the context.
+        lower_bound : float
+            Lower end of the search interval.
+        upper_bound : float
+            Upper end of the search interval.
+        max_iter : int, optional
+            Maximum number of bisection iterations.
+        tol : float, optional
+            Absolute tolerance for convergence in root difference or interval size.
+
+        Returns
+        -------
+        float or None
+            Parameter value at which the two roots coincide, or None if no
+            bracketing solution exists or convergence fails.
+        """
+        def eval_diff(x: float) -> float:
+            _ = parameter(x)
+            return self.get_root_a() - self.get_root_b()
+
+        f_low = eval_diff(lower_bound)
+        f_up = eval_diff(upper_bound)
+
+        # Check if a solution is bracketed
+        if f_low == 0:
+            return lower_bound
+        if f_up == 0:
+            return upper_bound
+        if f_low * f_up > 0:
+            print(f"Bounds do not bracket a solution: f(lower)={f_low}, f(upper)={f_up}")
+            return None
+
+        lo, hi = lower_bound, upper_bound
+        f_lo = f_low
+
+        for _ in range(max_iter):
+            mid = 0.5 * (lo + hi)
+            f_mid = eval_diff(mid)
+
+            if abs(f_mid) < tol or abs(hi - lo) < tol:
+                return mid
+
+            # Standard bisection logic, sign-agnostic
+            if f_lo * f_mid <= 0:
+                hi = mid
+            else:
+                lo = mid
+                f_lo = f_mid
+        print("Maximum iterations reached without convergence")
+        return mid
