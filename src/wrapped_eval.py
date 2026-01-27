@@ -29,10 +29,10 @@ class WrappedEvaluator:
     Handles vector flattening, broadcasting, and mapping inputs to compiled C++ code.
     """
 
-    constant_args: dict[Expression | SymbolicaLorenzVec | SymbolicaVec, NDArray] = None
+    constant_args: dict[Expression | SymbolicaLorenzVec | SymbolicaVec, NDArray] = {}
     args: list[Expression | SymbolicaLorenzVec | SymbolicaVec]
-    expression: Expression = None
-    evaluator: CompiledComplexEvaluator = None
+    expression: Expression = Expression()
+    evaluator: CompiledComplexEvaluator
 
     @staticmethod
     def flatten_vectors(
@@ -81,9 +81,12 @@ class WrappedEvaluator:
                 flat_args += [arg]
         return flat_args
 
-    def ensure_evaluator(self, force_rebuild):
+    def ensure_evaluator(self, force_rebuild, path = "../evaluators/"):
+        import os
+        os.makedirs(path, exist_ok=True)
+        
         if not force_rebuild:
-            path = f'../evaluators/{self.name}.so'
+            path = f'{path}{self.name}.so'
             try:
                 self.evaluator = CompiledComplexEvaluator.load(path, self.name, len(self.flat_args()), 1)
                 print(f'loaded "{path}"')
@@ -97,8 +100,8 @@ class WrappedEvaluator:
             {}, {}, self.flat_args(), external_functions=EXTERNAL_FUNCTIONS
         ).compile(
             self.name,
-            f"../evaluators/{self.name}.cpp",
-            f"../evaluators/{self.name}.so",
+            f"{path}{self.name}.cpp",
+            f"{path}{self.name}.so",
             number_type="complex",
             custom_header=CUSTOM_HEADER,
         )

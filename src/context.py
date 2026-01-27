@@ -69,7 +69,7 @@ class TriangleIntegrandContext:
     p1 = np.array([2, 1, 0, 0])
     p2 = np.array([2, -1, 0, 0])
 
-    masses = [1, 1, 1]
+    masses = [1.0, 1.0, 1.0]
 
     subtraction_width = 5
     max_imag_root_part = 1e15
@@ -388,7 +388,7 @@ class ThresholdFinder:
     upper_bound: float,
     max_iter: int = 1000,
     tol: float = 1e-10,
-):
+) -> float | None:
         """
         Find a parameter value where the two roots coincide using bisection.
 
@@ -436,7 +436,7 @@ class ThresholdFinder:
 
         lo, hi = lower_bound, upper_bound
         f_lo = f_low
-
+        mid = 0.5 * (lo + hi)
         for _ in range(max_iter):
             mid = 0.5 * (lo + hi)
             f_mid = eval_diff(mid)
