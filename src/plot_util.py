@@ -1,3 +1,4 @@
+import pyvista as pv
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -32,7 +33,7 @@ def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
     value = value / (value.max() + 1e-10)
 
     # HSV → RGB
-    rgb = plt.cm.hsv(hue)
+    rgb = plt.cm.hsv(hue) # type: ignore
     rgb[..., :3] *= value[..., None]
 
     # Add transparency for invalid values
@@ -49,7 +50,7 @@ def plot_complex_plane(xs, ys, ax=None, cmap_factor=1):
     plt.imshow(
         rgb,
         origin="lower",
-        extent=[x_min, x_max, y_min, y_max],
+        extent=[x_min, x_max, y_min, y_max], # type: ignore
         interpolation="nearest",
         aspect="equal",  # maintain correct aspect ratio
     )
@@ -67,19 +68,18 @@ def get_contour(x_lim, y_lim, z_lim, f, res=100):
     """
     Get a pyvista contour of a 3D function
     """
-    import pyvista as pv
 
     x = np.linspace(x_lim[0], x_lim[1], res)
     y = np.linspace(y_lim[0], y_lim[1], res)
     z = np.linspace(z_lim[0], z_lim[1], res)
     xs = np.stack(np.meshgrid(x, y, z), axis=-1)
     vals = f(xs)
-    grid = pv.ImageData()
-    grid.dimensions = np.array(vals.shape)
+    grid = pv.ImageData() # type: ignore
+    grid.dimensions = np.array(vals.shape) # type: ignore
     grid.origin = (x[0], y[0], z[0])
     grid.spacing = (x[1] - x[0], y[1] - y[0], z[1] - z[0])
     grid.point_data["vals"] = vals.flatten(order="F")
-    return grid.contour([0])
+    return grid.contour([0]) # type: ignore
 
 
 def plot_complex_integration_with_ref(
@@ -107,7 +107,7 @@ def plot_complex_integration_with_ref(
     
 
     #### Real part ####
-    axs[0].plot(ref_x_values, ref.real, label="Reference", c = 'k')
+    axs[0].plot(ref_x_values, ref.real, label="Reference", c = 'k') # type: ignore
     axs[0].errorbar(
         x_values,
         real_avg,
@@ -121,8 +121,8 @@ def plot_complex_integration_with_ref(
 
     axs[1].errorbar(
         x_values,
-        100 * (real_avg - ref_same_x.real) / (ref_same_x.real+1e-10),
-        100 * real_err / np.abs(ref_same_x.real+1e-10),
+        100 * (real_avg - ref_same_x.real) / (ref_same_x.real+1e-10), # type: ignore
+        100 * real_err / np.abs(ref_same_x.real+1e-10), # type: ignore
         fmt="o",
         capsize=3,
         label="Deviation"
@@ -131,7 +131,7 @@ def plot_complex_integration_with_ref(
     axs[1].set_ylabel("Re(Deviation) [%]")
 
     #### Imaginary part ###
-    axs[2].plot(ref_x_values, ref.imag, label="Reference", c = 'k')
+    axs[2].plot(ref_x_values, ref.imag, label="Reference", c = 'k') # type: ignore
     axs[2].errorbar(
         x_values,
         imag_avg,
@@ -145,8 +145,8 @@ def plot_complex_integration_with_ref(
 
     axs[3].errorbar(
         x_values,
-        100 * (imag_avg - ref_same_x.imag) / (ref_same_x.imag+1e-10),
-        100 * imag_err / np.abs(ref_same_x.imag+1e-10),
+        100 * (imag_avg - ref_same_x.imag) / (ref_same_x.imag+1e-10), # type: ignore
+        100 * imag_err / np.abs(ref_same_x.imag+1e-10), # type: ignore
         fmt="o",
         capsize=3,
         label="Deviation"

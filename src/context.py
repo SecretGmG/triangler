@@ -71,14 +71,14 @@ class TriangleIntegrandContext:
 
     masses = [1.0, 1.0, 1.0]
 
-    subtraction_width = 5
+    subtraction_width = 5.0
     max_imag_root_part = 1e15
-    max_eta_min = 0
-    mask_width = 5
+    max_eta_min = 0.0
+    mask_width = 5.0
 
-    a = 1
-    b = 1
-    c = 1
+    a = 1.0
+    b = 1.0
+    c = 1.0
 
     def only_integrated_counterterm(self):
         self.a = 0
@@ -377,9 +377,9 @@ class ThresholdFinder:
         self.ctx = ctx
     
     def get_root_a(self) -> float:
-        return self.a_eval.eval(np.array([0,0,1])).real
+        return self.a_eval.eval(np.array([0,0,1])).real # type: ignore
     def get_root_b(self) -> float:
-        return self.b_eval.eval(np.array([0,0,1])).real
+        return self.b_eval.eval(np.array([0,0,1])).real # type: ignore
     
     def find_threshold(
     self,
