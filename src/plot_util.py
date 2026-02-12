@@ -1,4 +1,7 @@
-import pyvista as pv
+try:
+    import pyvista as pv
+except Exception:
+    pass
 import numpy as np
 import matplotlib.pyplot as plt
 
