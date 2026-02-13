@@ -230,7 +230,7 @@ l_dir /= norm
 
 
 def get_double_box_configuration(K: sb.Expression) -> sb.Expression:
-    return (sum((k * K) ** 2 for k in k_dir) + m_1**2).sqrt() + (sum((l * K) ** 2 for l in l_dir) + m_2**2).sqrt() + (sum((k * K + l * K + p_1_ + p_2_) ** 2 for k, l, p_1_, p_2_ in zip(k_dir, l_dir, p_1[1:], p_2[1:])) + m_3**2).sqrt() - (p_1[0] + p_2[0])
+    return (sum((k * K) ** 2 for k in k_dir) + m_1**2).sqrt() + (sum((l * K) ** 2 for l in l_dir) + m_2**2).sqrt() + (sum((k * K + l * K + p_1_ + p_2_) ** 2 for k, l, p_1_, p_2_ in zip(k_dir, l_dir, p_1[1:], p_2[1:])) + m_3**2).sqrt() - (p_1[0] + p_2[0]) # type: ignore
     
 
 settings = {
