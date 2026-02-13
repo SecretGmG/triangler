@@ -1,110 +1,76 @@
 import numpy as np
-from pyparsing import Callable
-import sympy as sp
+import symbolica as sb
 import itertools
-import multiprocessing
 import time
-import warnings
+
+class HomotopySystem:
+    def __init__(self, exprs, vars_list, degrees):
+        self.exprs = exprs
+        self.vars_list = vars_list
+        self.degrees = degrees
+        self.jac_exprs = jacobian(exprs, vars_list)
+
+        self.f_func = sb.Expression.evaluator_multiple(exprs, {}, {}, vars_list)
+        self.j_func = sb.Expression.evaluator_multiple(
+            list(self.jac_exprs.ravel()), {}, {}, vars_list
+        )
+    
+    def evaluate_F(self, x):
+        return np.array(self.f_func.evaluate_complex(x), dtype=np.complex128).ravel()
+    
+    def evaluate_J_F(self, x):
+        return np.array(self.j_func.evaluate_complex(x), dtype=np.complex128).reshape(self.jac_exprs.shape)
+    
+    def evaluate_G(self, x):
+        return np.array(
+            [x[i] ** self.degrees[i] - 1 for i in range(len(x))],
+            dtype=np.complex128,
+        )
+
+    def evaluate_J_G(self, x):
+        J = np.zeros((len(x), len(x)), dtype=np.complex128)
+        for i, d in enumerate(self.degrees):
+            J[i, i] = 1 if d == 1 else d * x[i] ** (d - 1)
+        return J
+    
+    def solve_system(self, settings):
+        roots = [np.exp(2j * np.pi * np.arange(d) / d) for d in self.degrees]
+        start_solutions = list(itertools.product(*roots))
+        print(len(start_solutions))
+
+        gamma = np.exp(1j * 1.2345)
+        
+        results = []
+        for s in start_solutions:
+            results.append(track_path(s, gamma, settings, self))
+
+        sols = [r for r in results if r is not None]
+        return sols
 
 
-# ==========================================
-# Double Box System Definition
-# ==========================================
-
-def generate_double_box_system():
-
-    OSE1, OSE2, OSE3, K = sp.symbols("P_1 P_2 P_3 k")
-    vars_list = [OSE1, OSE2, OSE3, K]
-
-    F_exprs = [
-        OSE1 + OSE2 + OSE3 - (p_1[0] + p_2[0]),
-        OSE1**2 - (sum((k_dir * K) ** 2) + m_1**2),
-        OSE2**2 - (sum((l_dir * K) ** 2) + m_2**2),
-        OSE3**2 - (sum((k_dir * K + l_dir * K + p_1[1:] + p_2[1:]) ** 2) + m_3**2)
-    ]
+def jacobian(cvec : list[sb.Expression], vars : list[sb.Expression]):
+    """
+    Creates the Jacobian matrix from a column vector of expressions and a list of variables.
+    """
+    jac_entries = []
+    for i in range(len(cvec)):
+        row = []
+        for var in vars:
+            row.append(cvec[i].derivative(var))
+        jac_entries.append(row)
+    return np.asarray(jac_entries)
 
 
-    degrees = np.array([1, 2, 2, 2], dtype=int)
-    return compile_system(F_exprs, vars_list, degrees)
-
-
-def compile_system(F_exprs, vars_list, degrees):
-    F_mat = sp.Matrix(F_exprs)
-    J_mat = F_mat.jacobian(vars_list)
-
-    f_func = sp.lambdify([vars_list], F_mat, modules="numpy", cse=True)
-    j_func = sp.lambdify([vars_list], J_mat, modules="numpy", cse=True)
-
-    def F(x):
-        return np.array(f_func(x), dtype=np.complex128).ravel()
-
-    def J(x):
-        return np.array(j_func(x), dtype=np.complex128)
-
-    return F, J, degrees, [str(v) for v in vars_list]
-
-
-# ==========================================
-# Globals (worker-local)
-# ==========================================
-
-GLOBAL_F: Callable = None # type: ignore
-GLOBAL_J: Callable = None # type: ignore
-GLOBAL_DEGREES : np.ndarray = None # type: ignore
-
-
-def init_worker():
-    global GLOBAL_F, GLOBAL_J, GLOBAL_DEGREES
-    warnings.filterwarnings("ignore")
-
-    GLOBAL_F, GLOBAL_J, GLOBAL_DEGREES, _ = generate_double_box_system()
-
-
-def evaluate_F(x):
-    return GLOBAL_F(x)
-
-
-def evaluate_J_F(x):
-    return GLOBAL_J(x)
-
-
-def evaluate_G(x):
-    return np.array(
-        [x[i] ** GLOBAL_DEGREES[i] - 1 for i in range(len(x))],
-        dtype=np.complex128,
-    )
-
-
-def evaluate_J_G(x):
-    J = np.zeros((len(x), len(x)), dtype=np.complex128)
-    for i, d in enumerate(GLOBAL_DEGREES):
-        J[i, i] = 1 if d == 1 else d * x[i] ** (d - 1)
-    return J
-
-
-# ==========================================
-# Path Tracker
-# ==========================================
-
-
-def track_path_worker(args):
-    x_start, gamma, settings = args
+def track_path(x_start, gamma, settings, homotopy_system):
+    x = np.array(x_start, dtype=np.complex128)
+    t = 0.0
+    x_prev, t_prev = None, 0.0
 
     max_steps = settings["max_steps"]
     step_size = settings["initial_step"]
-    min_step = settings["min_step"]
-    tol = settings["tolerance"]
-    divergence_limit = settings["divergence_limit"]
-    use_secant = settings["predictor"] == "secant"
-
-    x = np.array(x_start, dtype=np.complex128)
-    t = 0.0
-
-    x_prev = None
-    t_prev = 0.0
 
     for _ in range(max_steps):
-        if np.max(np.abs(x)) > divergence_limit:
+        if np.max(np.abs(x)) > settings["divergence_limit"]:
             return None
 
         if t >= 1.0:
@@ -112,104 +78,122 @@ def track_path_worker(args):
 
         h = min(step_size, 1.0 - t)
 
-        # Predictor
-        if use_secant and x_prev is not None and abs(t - t_prev) > 1e-14:
-            dx_dt = (x - x_prev) / (t - t_prev)
-            x_pred = x + dx_dt * h
-        else:
-            try:
-                dH_dt = -gamma * evaluate_G(x) + evaluate_F(x)
-                JH = gamma * (1 - t) * evaluate_J_G(x) + t * evaluate_J_F(x)
-                x_pred = x - np.linalg.solve(JH, dH_dt) * h
-            except np.linalg.LinAlgError:
-                step_size *= 0.5
-                continue
+        x_pred, success = _predict_step(
+            x, t, h, x_prev, t_prev,
+            gamma, settings, homotopy_system
+        )
 
-        # Corrector
-        t_next = t + h
-        x_new = x_pred
-
-        for _ in range(5):
-            try:
-                H = gamma * (1 - t_next) * evaluate_G(x_new) + t_next * evaluate_F(
-                    x_new
-                )
-                if np.max(np.abs(H)) < tol:
-                    break
-                JH = gamma * (1 - t_next) * evaluate_J_G(x_new) + t_next * evaluate_J_F(
-                    x_new
-                )
-                x_new -= np.linalg.solve(JH, H)
-            except np.linalg.LinAlgError:
-                step_size *= 0.5
-                break
-        else:
+        if not success:
             step_size *= 0.5
-            if step_size < min_step:
+            continue
+
+        x_new, success = _correct_step(
+            x_pred, t + h,
+            gamma, settings, homotopy_system
+        )
+
+        if not success:
+            step_size *= 0.5
+            if step_size < settings["min_step"]:
                 return None
             continue
 
         x_prev, t_prev = x, t
-        x, t = x_new, t_next
+        x, t = x_new, t + h
         step_size = min(step_size * 1.1, 0.1)
 
-    # Final Newton refinement
+    return _final_newton_refinement(x, homotopy_system)
+
+
+def _predict_step(x, t, h, x_prev, t_prev, gamma, settings, homotopy_system):
+    use_secant = settings["predictor"] == "secant"
+
+    if use_secant and x_prev is not None and abs(t - t_prev) > 1e-14:
+        dx_dt = (x - x_prev) / (t - t_prev)
+        return x + dx_dt * h, True
+
+    try:
+        dH_dt = (
+            -gamma * homotopy_system.evaluate_G(x)
+            + homotopy_system.evaluate_F(x)
+        )
+
+        JH = (
+            gamma * (1 - t) * homotopy_system.evaluate_J_G(x)
+            + t * homotopy_system.evaluate_J_F(x)
+        )
+
+        x_pred = x - np.linalg.solve(JH, dH_dt) * h
+        return x_pred, True
+
+    except np.linalg.LinAlgError:
+        return None, False
+
+
+def _correct_step(x_pred, t_next, gamma, settings, homotopy_system):
+    tol = settings["tolerance"]
+    x_new = x_pred
+
+    for _ in range(5):
+        try:
+            H = (
+                gamma * (1 - t_next) * homotopy_system.evaluate_G(x_new)
+                + t_next * homotopy_system.evaluate_F(x_new)
+            )
+
+            if np.max(np.abs(H)) < tol:
+                return x_new, True
+
+            JH = (
+                gamma * (1 - t_next) * homotopy_system.evaluate_J_G(x_new)
+                + t_next * homotopy_system.evaluate_J_F(x_new)
+            )
+
+            x_new -= np.linalg.solve(JH, H)
+
+        except np.linalg.LinAlgError:
+            return None, False
+
+    return None, False
+
+
+def _final_newton_refinement(x, homotopy_system):
     for _ in range(15):
         try:
-            F = evaluate_F(x)
+            F = homotopy_system.evaluate_F(x)
+
             if np.max(np.abs(F)) < 1e-11:
                 return x
-            x -= np.linalg.solve(evaluate_J_F(x), F)
+
+            x -= np.linalg.solve(
+                homotopy_system.evaluate_J_F(x),
+                F
+            )
+
         except np.linalg.LinAlgError:
             break
 
-    return x if np.max(np.abs(evaluate_F(x))) < 1e-6 else None
+    return x if np.max(np.abs(homotopy_system.evaluate_F(x))) < 1e-6 else None
 
 
-# ==========================================
-# Solver
-# ==========================================
-
-
-def solve_double_box():
-    degrees = [2, 2, 2 ,2]
-    var_names = ["P_1", "P_2", "P_3", "k"]
-
-    settings = {
-        "max_steps": 5000,
-        "initial_step": 0.02,
-        "min_step": 1e-8,
-        "tolerance": 1e-9,
-        "divergence_limit": 1e7,
-        "predictor": "secant",
-    }
-
-    roots = [np.exp(2j * np.pi * np.arange(d) / d) for d in degrees]
-    start_solutions = list(itertools.product(*roots))
-    print(len(start_solutions))
-
-    gamma = np.exp(1j * 1.2345)
-    tasks = [(s, gamma, settings) for s in start_solutions]
-
-    t0 = time.time()
-    with multiprocessing.Pool(initializer=init_worker) as pool:
-        results = pool.map(track_path_worker, tasks)
-
-    sols = [r for r in results if r is not None]
-
-    # Deduplicate
+def check_sqrt_system(k):
+    return (
+        np.sqrt(np.sum((k_dir * k) ** 2) + m_1**2)
+        + np.sqrt(np.sum((l_dir * k) ** 2) + m_2**2)
+        + np.sqrt(
+            np.sum((k_dir * k + l_dir * k + p_1[1:] + p_2[1:]) ** 2) + m_3**2
+        )
+        - p_1[0]
+        - p_2[0]
+    )
+    
+def deduplicate_solutions(sols, tol=1e-3):
     unique = []
     for s in sols:
-        if not any(np.linalg.norm(s - u) < 1e-3 for u in unique):
+        if not any(np.linalg.norm(s - u) < tol for u in unique):
             unique.append(s)
+    return unique
 
-    print(f"Done in {time.time() - t0:.2f}s. Found {len(unique)} solutions.")
-    return unique, var_names
-
-
-# ==========================================
-# Run
-# ==========================================
 
 k_dir = np.array([1, 1, 1], dtype=np.float64)
 l_dir = np.array([1, 1, 1], dtype=np.float64)
@@ -226,16 +210,16 @@ k_dir /= norm
 l_dir /= norm
 
 
-def check_sqrt_system(k):
-    return (
-        np.sqrt(np.sum((k_dir * k) ** 2) + m_1**2)
-        + np.sqrt(np.sum((l_dir * k) ** 2) + m_2**2)
-        + np.sqrt(
-            np.sum((k_dir * k + l_dir * k + p_1[1:] + p_2[1:]) ** 2) + m_3**2
-        )
-        - p_1[0]
-        - p_2[0]
-    )
+settings = {
+    "max_steps": 5000,
+    "initial_step": 0.02,
+    "min_step": 1e-8,
+    "tolerance": 1e-9,
+    "divergence_limit": 1e7,
+    "predictor": "secant",
+}
+
+
 
 
 def print_configuration_latex():
@@ -298,10 +282,26 @@ def print_all_solutions_latex(sols, names):
 
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
-
     print_configuration_latex()
+    OSE1, OSE2, OSE3, K = sb.S("P_1", "P_2", "P_3", "k", is_scalar=True)
+    vars_list = [OSE1, OSE2, OSE3, K]
+    
+    F_exprs = [
+        OSE1 + OSE2 + OSE3 - (p_1[0] + p_2[0]),
+        OSE1**2 - (sum((k * K) ** 2 for k in k_dir) + m_1**2),
+        OSE2**2 - (sum((l * K) ** 2 for l in l_dir) + m_2**2),
+        OSE3**2 - (sum((k * K + l * K + p_1_ + p_2_) ** 2 for k, l, p_1_, p_2_ in zip(k_dir, l_dir, p_1[1:], p_2[1:])) + m_3**2)
+    ]
 
-    sols, names = solve_double_box()
-    print_all_solutions_latex(sols, names)
+    degrees = np.array([1, 2, 2, 2], dtype=int)
+    homotopy_system = HomotopySystem(F_exprs, vars_list, degrees)
+    
+    t_0 = time.time()
+    sols = homotopy_system.solve_system(settings)
+    unique = deduplicate_solutions(sols)
+    
+    print(f"Done in {time.time() - t_0:.2f}s. Found {len(unique)} solutions.")
+    names =  [str(v) for v in homotopy_system.vars_list]
+    
+    print_all_solutions_latex(unique, names)
         
