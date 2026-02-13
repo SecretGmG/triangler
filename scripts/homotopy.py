@@ -15,6 +15,25 @@ class HomotopySystem:
             list(self.jac_exprs.ravel()), {}, {}, vars_list
         )
     
+    @staticmethod
+    def from_expr_with_sqrts(expr : sb.Expression, var: sb.Expression, degree = 1):
+        
+        sqrt_pattern = sb.S('x_').sqrt()
+        
+        i = 0 
+        
+        terms = []
+        
+        
+        while expr.matches(sqrt_pattern):
+            term_under_sqrt = expr.match(sqrt_pattern).__next__().popitem()[1]
+            i += 1
+            new_symbol = sb.S(f'P_{i}')
+            expr = expr.replace(term_under_sqrt.sqrt(), new_symbol)
+            terms.append(new_symbol**sb.N(2) - term_under_sqrt)
+        
+        return HomotopySystem([expr] + terms, [sb.S(f'P_{j+1}') for j in range(i)] + [var], [2] * i + [degree])        
+    
     def evaluate_F(self, x):
         return np.array(self.f_func.evaluate_complex(x), dtype=np.complex128).ravel()
     
@@ -199,7 +218,7 @@ k_dir = np.array([1, 1, 1], dtype=np.float64)
 l_dir = np.array([1, 1, 1], dtype=np.float64)
 
 m_1 = 1.0  # GeV
-m_2 = 1.0  # GeV
+m_2 = 0.7  # GeV
 m_3 = 1.0  # GeV
 p = 10  # GeV
 p_1 = np.array([p, 1, 1, 1], dtype=np.float64)  # GeV
@@ -209,6 +228,10 @@ norm = np.sum(k_dir) + np.sum(l_dir)
 k_dir /= norm
 l_dir /= norm
 
+
+def get_double_box_configuration(K: sb.Expression) -> sb.Expression:
+    return (sum((k * K) ** 2 for k in k_dir) + m_1**2).sqrt() + (sum((l * K) ** 2 for l in l_dir) + m_2**2).sqrt() + (sum((k * K + l * K + p_1_ + p_2_) ** 2 for k, l, p_1_, p_2_ in zip(k_dir, l_dir, p_1[1:], p_2[1:])) + m_3**2).sqrt() - (p_1[0] + p_2[0])
+    
 
 settings = {
     "max_steps": 5000,
@@ -282,19 +305,11 @@ def print_all_solutions_latex(sols, names):
 
 
 if __name__ == "__main__":
-    print_configuration_latex()
-    OSE1, OSE2, OSE3, K = sb.S("P_1", "P_2", "P_3", "k", is_scalar=True)
-    vars_list = [OSE1, OSE2, OSE3, K]
+    k = sb.S("K")
+    double_box =  get_double_box_configuration(k)
     
-    F_exprs = [
-        OSE1 + OSE2 + OSE3 - (p_1[0] + p_2[0]),
-        OSE1**2 - (sum((k * K) ** 2 for k in k_dir) + m_1**2),
-        OSE2**2 - (sum((l * K) ** 2 for l in l_dir) + m_2**2),
-        OSE3**2 - (sum((k * K + l * K + p_1_ + p_2_) ** 2 for k, l, p_1_, p_2_ in zip(k_dir, l_dir, p_1[1:], p_2[1:])) + m_3**2)
-    ]
-
-    degrees = np.array([1, 2, 2, 2], dtype=int)
-    homotopy_system = HomotopySystem(F_exprs, vars_list, degrees)
+    print_configuration_latex()
+    homotopy_system = HomotopySystem.from_expr_with_sqrts(double_box, k, 2)
     
     t_0 = time.time()
     sols = homotopy_system.solve_system(settings)
